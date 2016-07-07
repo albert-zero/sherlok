@@ -73,6 +73,7 @@ using namespace std;
 #  define ACCESS(x,y)      _access    ((x),(y))
 
 #else
+#  include <sys/time.h>
 #  include <sys/times.h>
 #  include <netdb.h>
 #  include <unistd.h>

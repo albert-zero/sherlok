@@ -19,8 +19,8 @@
 
 // ----------------------------------------------------------------
 // ----------------------------------------------------------------
-// int wmain(int argc, wchar_t *argv[]) {
-int main(int argc, char **argv)  {
+int wmain(int argc, wchar_t *argv[]) {
+// int main(int argc, char **argv)  {
     int	    i = 0;
     int	    j = 0;
     int	    k = 0; 

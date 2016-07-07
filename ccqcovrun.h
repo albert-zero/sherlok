@@ -40,7 +40,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     */
 #   include "cti.h"
 
-    /* @(#) $Id: //Douala/DoualaLayer/dev/v8sherlok/ccqcovrun.h#6 $ SAP */
+    /* @(#) $Id: //Douala/DoualaLayer/dev/v8sherlok/ccqcovrun.h#7 $ SAP */
     /**********************************************************************
      *
      * ccQ, sapucchk, sapuccnv
