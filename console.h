@@ -29,6 +29,7 @@
 
 #include <errno.h>
 #include "cti.h"
+#include "ptypes.h"
 
 // ----------------------------------------------------
 //! \class TLogger
@@ -302,7 +303,7 @@ public:
             ERROR_OUT(cU("gethostbyname"), aResult);
             return false;
         }
-    /*SAPUNICODEOK_CHARTYPE*/
+        /*SAPUNICODEOK_CHARTYPE*/
         char   aInetAddr[32];
         memsetR(aInetAddr, 0, 32);
 
@@ -323,11 +324,11 @@ public:
 #endif
 
 #if defined (SAPonNT) || defined (SAPonHPPA) 
-    /*CCQ_IPV6_SUPPORT_OK*/
+        /*CCQ_IPV6_SUPPORT_OK*/
         aServerAddr.sin_addr.s_addr = inet_addr(aInetAddr);
         memsetR(&(aServerAddr.sin_zero), 0, 8);
 #else
-    /*CCQ_IPV6_SUPPORT_OK*/
+        /*CCQ_IPV6_SUPPORT_OK*/
         aResult = inet_pton(aServerAddr.sin_family, aInetAddr, reinterpret_cast<char *>(&(aServerAddr.sin_addr)));
         if (aResult != 1) {
             ERROR_OUT(cU("inet_pton"), (int)aResult);
@@ -397,31 +398,30 @@ public:
             mErrState = 0;
             return false;
         }
-
         SAPSOCKLEN_T aSize = sizeofR(struct sockaddr);
         /*CCQ_IPV6_SUPPORT_OK*/
         struct sockaddr_in aClientAddr;
 
-
         mErrState = 0;
-    for (int i = 0; i < 10; i++) {
-        /*CCQ_IPV6_SUPPORT_OK*/
-        mSocketFd = accept(mSocket, reinterpret_cast<struct sockaddr *>(&aClientAddr), &aSize);
-        if (mSocketFd <= 0) {
-            if (errno == EINTR) {
-            continue;
+        for (int i = 0; i < 10; i++) {
+            /*CCQ_IPV6_SUPPORT_OK*/
+            mSocketFd = accept(mSocket, reinterpret_cast<struct sockaddr *>(&aClientAddr), &aSize);
+            if (mSocketFd <= 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+            } 
+            break;
         }
-        } 
-        break;
-    }
 
-    if (mSocketFd <= 0) {
+        if (mSocketFd <= 0) {
             ERROR_OUT(cU("accept"), errno);
-        return false;
-    } 
+            return false;
+        }  
         getVersion(false);
         return true;
     }
+
     // -----------------------------------------------------------------
     // TConsole::login
     //! \brief Send the intro
@@ -450,10 +450,13 @@ public:
         TString aVersion(mProperties->getVersion(aExtended));
         mErrState = (int)send(mSocketFd, gSplash.a7_str(), gSplash.pcount(), 0);
         if (mErrState <= 0) { ERROR_OUT(cU("connection closed"), mErrState); return; }
+    
         mErrState = (int)send(mSocketFd, aVersion.a7_str(), aVersion.pcount(), 0);
         if (mErrState <= 0) { ERROR_OUT(cU("connection closed"), mErrState); return; }
+        
         mErrState = (int)send(mSocketFd, cR("\015\012\015\012"), 4, 0);
         if (mErrState <= 0) { ERROR_OUT(cU("connection closed"), mErrState); return; }
+        
         prompt();
     }
     // -----------------------------------------------------------------
