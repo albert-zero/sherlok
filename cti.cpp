@@ -22,23 +22,31 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 // -----------------------------------------------------------------
+#include "cti.h"
+#include "ptypes.h"
+
 #include <iostream>
 #include <new>
+#include <string>
 
-#if defined(PROFILE_CPP)
-#   include "sapiostrm.hpp"
-#   include "saptype.h"
-#   include "dlxx.h"
-#   include "sapthr.h"
+#if defined(_WINDOWS) || defined(SAPonNT)
+#include <Windows.h>
+#else
+#include <dlfcn.h>
 #endif
 
-#include "ptypes.h"
-#include "cti.h"
+// -----------------------------------------------------------------
+// -----------------------------------------------------------------
+extern "C" {
+    typedef JNIEXPORT jint(JNICALL *TAgentOnLoad)( /*SAPUNICODEOK_CHARTYPE*/
+        const char      *aOptions,
+        TCtiInterface  **CtiEnv,
+        jint             aVersion);
 
-#if !defined(SAPwithTHREADS) && defined(PROFILE_CPP)
-#    error PROFILE_CPP needs SAPwithTHREADS
-#endif
-
+    typedef JNIEXPORT jint(JNICALL *TTypesOnLoad)( /*SAPUNICODEOK_CHARTYPE*/
+        TCtiInterface  **CtiEnv,
+        jint             aVersion);
+}
 extern "C" {
     TCtiInterface& TCtiInterface::operator=(const TCtiInterface &aCti) {
         if (this == &aCti) {
@@ -60,6 +68,7 @@ extern "C" {
         this->onObjectRealloc   = aCti.onObjectRealloc;
 
         this->onVMDeath         = aCti.onVMDeath;
+        this->toString          = NULL;
         return *this;
     };
 
@@ -70,7 +79,7 @@ extern "C" {
         const char  *aPackage,          /*SAPUNICODEOK_CHARTYPE*/
         const char  *aClass,            /*SAPUNICODEOK_CHARTYPE*/
         const char  *aMethod,           /*SAPUNICODEOK_CHARTYPE*/
-        const char  *aSignature) {
+        const char  *aSignature,...) {
 
         if (mCti != NULL) {
             if (*jMethod == NULL) {
@@ -79,30 +88,133 @@ extern "C" {
             mMethod = *jMethod;
 
             //va_list  aVarArgs;
-            //va_start(aVarArgs, aMethod);
+            //va_start(aVarArgs, aSignature);
             mCti->onEnterMethod(mMethod);
             //va_end  (aVarArgs);
         }
     };
-    
-    TCtiProfiler::TCtiProfiler(int argc, /*SAPUNICODEOK_CHARTYPE*/ char * argv[]) {
-        mCti = new TCtiInterface;
+
+    // -----------------------------------------------------------------
+    // -----------------------------------------------------------------
+    TCtiProfiler::TCtiProfiler(         /*SAPUNICODEOK_CHARTYPE*/
+        const char *aPackage,           /*SAPUNICODEOK_CHARTYPE*/
+        const char *aClass,             /*SAPUNICODEOK_CHARTYPE*/
+        int        *argc,
+        wchar_t    *argv[]) {
+
+        int            aNewCnt = 0;
+        wchar_t       *aNewArgv[64];
+
+        jint           jResult = JNI_OK;
+        TAgentOnLoad   aFncAgentLoad;
+        bool           aRunSherlok = false;
+        /*SAPUNICODEOK_CHARTYPE*/
+        char aOptions[1024];
+        /*SAPUNICODEOK_CHARTYPE*//*SAPUNICODEOK_LIBFCT*//*SAPUNICODEOK_STRINGCONST*/
+		strcpy(aOptions, (const char*)"ConfigPath=.");
+
+        mIsMain = true;
+
+        for (int i = 0; i < *argc; i++) {
+            std::wstring aArg(argv[i]);
+            
+            if (aArg.compare(0, 17, L"-agentlib:sherlok") == 0) {
+                aRunSherlok = true;
+
+                if (argv[i][17] != L'=') {
+                    break;
+                }
+                wchar_t *aSrc = argv[i] + 18;
+                /*SAPUNICODEOK_CHARTYPE*/
+                char    *aDst = aOptions;
+                /*SAPUNICODEOK_CHARTYPE*/
+                while  ((*aDst++ = (char)(*aSrc++)) != 0);
+                argv[i][0] = L'\0';
+                break;
+            }
+            else {
+                aNewArgv[aNewCnt++] = argv[*argc];
+            }
+        }
+
+        // Remove the sherlok specific arguments to prevent program from 
+        // thowing errors for unkown parameters
+        if (aRunSherlok) {
+            for (int i = 0; i < aNewCnt; i++) {
+                argv[i] = aNewArgv[i];
+            }
+            *argc = aNewCnt;
+        }
+        else {
+            /*SAPUNICODEOK_CHARTYPE*//*SAPUNICODEOK_STRINGCONST*/
+            strcpy(aOptions, "ConfigPath=.");
+        }
+
+
+#if defined(_WINDOWS) || defined(SAPonNT)
+        wchar_t *aStrLibname  = (wchar_t *)L"sherlok.dll";
+        HMODULE  aHandleLib   = LoadLibrary(aStrLibname);
+
+        wchar_t *aTypeLibname = (wchar_t *)L"shertype.dll";
+        HMODULE  aHandleTypes = LoadLibrary(aTypeLibname);
+#else
+        /*SAPUNICODEOK_CHARTYPE*//*SAPUNICODEOK_STRINGCONST*/
+        char    *aStrLibname  = (char *)"libsherlok.so";
+        void    *aHandleLib   = dlopen(aStrLibname, RTLD_LAZY | RTLD_GLOBAL);
+
+        char    *aTypeLibname = (char *)"libshertype.so";
+        void    *aHandleTypes = dlopen(aStrLibname, RTLD_LAZY | RTLD_GLOBAL);
+#endif
+
+        if (aHandleLib == NULL) {
+            std::wcerr << L"Error loading library sherlok library" << std::endl;
+            return;
+        }
+
+#if defined (_WINDOWS) || defined(SAPonNT)
+        aFncAgentLoad = (TAgentOnLoad)GetProcAddress(aHandleLib, (LPCSTR)L"CtiAgentOnLoad");
+#else
+        dlerror();
+        /*SAPUNICODEOK_CHARTYPE*//*SAPUNICODEOK_STRINGCONST*/
+        aFncAgentLoad = (TAgentOnLoad)dlsym(aHandleLib, "CtiAgentOnLoad");
+#endif
+
+        if (aFncAgentLoad == NULL) {
+            std::wcerr << L"Error loading method CtiAgentOnLoad" << std::endl;
+            return;
+        }
+
+        jResult = aFncAgentLoad(aOptions, &mCti, CTI_VERSION_1);
+
+#if defined (_WINDOWS) || defined(SAPonNT)
+        GetProcAddress(aHandleLib, (LPCSTR)L"CtiTypesOnLoad");
+#else
+        dlerror();
+        /*SAPUNICODEOK_CHARTYPE*//*SAPUNICODEOK_STRINGCONST*/
+        dlsym(aHandleLib, "CtiTypesOnLoad");
+#endif
+
+        if (mCti != NULL) {
+            /*SAPUNICODEOK_CHARTYPE*//*SAPUNICODEOK_STRINGCONST*/
+            mMethod = mCti->registerMethod(aPackage, aClass, (const char*)"main", (const char*)"int argc, SAP_UC** argv");
+        }
     };
-    
-    // 
+
+    // -----------------------------------------------------------------
     // -----------------------------------------------------------------
     TCtiProfiler::~TCtiProfiler() {
         if (mCti != NULL) {
             mCti->onExitMethod(mMethod);
+            
+            if (mIsMain) {
+                mCti->onVMDeath();
+            }
         }
     };
 
     // -----------------------------------------------------------------
     // -----------------------------------------------------------------
     TCtiInterface *TCtiProfiler::getCti() {
-        if (mCti == NULL) {
-            mCti = new TCtiInterface;
-        }
         return mCti;
     };
 
@@ -115,7 +227,7 @@ extern "C" {
         if (mCti != NULL) {
             mCti->onObjectAlloc(aSize, jMethod, aLineNo, &aMem);
         }
-        else { 
+        else {
             #undef malloc
             /*SAPUNICODEOK_CHARTYPE*//*SAPUNICODEOK_LIBFCT*/
             aMem = (unsigned char *)malloc(aSize);
@@ -142,7 +254,7 @@ extern "C" {
     // -----------------------------------------------------------------
     void TCtiProfiler::ctiDelete(void *aMem) {
         if (mCti != NULL) { /*SAPUNICODEOK_CHARTYPE*/
-                mCti->onObjectFree(reinterpret_cast<unsigned char *>(aMem));
+            mCti->onObjectFree(reinterpret_cast<unsigned char *>(aMem));
         }
         else  {
             #undef free
@@ -157,17 +269,20 @@ TCtiInterface *TCtiProfiler::mCti = NULL;
 
 
 #ifdef PROFILE_MEM
-/*
+// 
+// usage:
+// TObject *anObject = cti::new(jMethod, aLine) TObject()
+//
 namespace cti {
     // -----------------------------------------------------------------
     // -----------------------------------------------------------------
-    void *operator new (size_t aSize, jmethodID jMethod, int aLineNo)  throw() {
+    void *operator new (size_t aSize, jmethodID jMethod, int aLineNo)  throw(){
         return TCtiProfiler::ctiAlloc(aSize, jMethod, aLineNo);
     };
 
     // -----------------------------------------------------------------
     // -----------------------------------------------------------------
-    void *operator new [] (size_t aSize, jmethodID jMethod, int aLineNo) throw() {
+    void *operator new [](size_t aSize, jmethodID jMethod, int aLineNo) throw() {
         return TCtiProfiler::ctiAlloc(aSize, jMethod, aLineNo);
     };
 
@@ -179,82 +294,14 @@ namespace cti {
 
     // -----------------------------------------------------------------
     // -----------------------------------------------------------------
-    void operator delete[] (void *aMem) throw() {
+    void operator delete[](void *aMem) throw() {
         TCtiProfiler::ctiDelete(aMem);
     };
-}*/
+
 #endif
 
-// -----------------------------------------------------------------
-// -----------------------------------------------------------------
-extern "C" {
-    JNIEXPORT jint (JNICALL *AgentOnLoad)( /*SAPUNICODEOK_CHARTYPE*/
-        const char      *aOptions, 
-        TCtiInterface  **CtiEnv,
-        jint             aVersion) = NULL;
-}
 
-// -----------------------------------------------------------------
-// -----------------------------------------------------------------
-extern "C" JNIEXPORT jint JNICALL CtiInit(        /*SAPUNICODEOK_CHARTYPE*/
-        const char      *aOptions) { 
 
-    jint   jResult = JNI_OK;
-    
-#   if defined(PROFILE_CPP)
-        SAP_UC            aProfilerName[128];
-        DL_HDL            aProfilerHdl;
-        SAPRETURN            aResult;
 
-        TCtiInterface  *aCti = TCtiProfiler::getCti();
 
-        strcpyU(aProfilerName, cU(DL_DEF_LIB_PREFIX));
-        strcatU(aProfilerName, cU("sherlok"));
-        strcatU(aProfilerName, cU(DL_DEF_LIB_POSTFIX));
-    
-        aResult = DlLoadLib2((const SAP_UC *)aProfilerName, &aProfilerHdl, DL_RTLD_LAZY | DL_RTLD_GLOBAL);
-        if (aResult != 0) {
-            SAP_cerr << cU("Error loading library sherlok rc=") << aResult << std::endl;
-            return JNI_ERR;
-        }
-        aResult = DlLoadFunc(aProfilerHdl,  cU("CtiAgentOnLoad"), 0, (DL_ADR*)&AgentOnLoad);
-        if (aResult != 0) {
-            SAP_cerr << cU("Error loading function pointer CtiAgentOnLoad, rc=") << aResult << std::endl;
-            return JNI_ERR;
-        }
-        jResult = AgentOnLoad(aOptions, &aCti, CTI_VERSION_1);
-#   endif 
 
-    return jResult;
-};
-
-// -----------------------------------------------------------------
-// -----------------------------------------------------------------
-extern "C" void ccQCovInitSherlok (int argc, /*SAPUNICODEOK_CHARTYPE*/ char *argv []) {
-    /*SAPUNICODEOK_CHARTYPE*/ char  aOptions[1024];
-    /*SAPUNICODEOK_CHARTYPE*/ char *aPtr = aOptions;
-
-    for (int i = 0; i < argc; i++) {
-        SAP_UC *aLocArg = (SAP_UC *)argv[i];
-
-        if (!STRNCMP(aLocArg, cU("-agentlib:sherlok"), 17)) {
-            if (aLocArg[17] == cU('=')) {
-                for (aLocArg = aLocArg + 18; *aLocArg != cU('\0'); aLocArg++) {
-                    /*SAPUNICODEOK_CHARTYPE*/ 
-                    *aPtr = (char )(*aLocArg);
-                    aPtr ++;
-                }
-            }
-            *argv[i]    = cU('\0');
-            *aPtr       = cR('\0');
-            CtiInit(aOptions);
-            break;
-        }
-            
-        if (!STRNCMP(aLocArg, cU("pf="), 3)) {
-            /*SAPUNICODEOK_STRINGCONST*/
-            CtiInit(cR("ConfigPath=."));
-            break;
-        }
-    }
-}

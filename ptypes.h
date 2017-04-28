@@ -5,7 +5,7 @@
 // Date  : 27.08.2008
 // Abstract:
 //    compile with SAPon<platform> using sap C++ runtime sapcpp47.dll
-//    compile with PROFILE_CPP using sap C++ runtime + thrlib
+//    compile with PROFILE_SAP_CPP using sap C++ runtime + thrlib
 
 // Copyright (C) 2015  Albert Zedlitz
 //
@@ -177,6 +177,21 @@ using namespace std;
 #  define SAPSOCKLEN_T socklen_t
 
 #else
+    typedef unsigned long  THR_ID_TYPE;
+
+#   if defined (_WINDOWS)
+#       define DL_DEF_LIB_PREFIX    ""
+#       define DL_DEF_LIB_POSTFIX   "dll"
+        typedef HMODULE  DL_HDL;
+        typedef FARPROC  DL_ADR;
+#   else
+#       define DL_DEF_LIB_PREFIX    "lib"
+#       define DL_DEF_LIB_POSTFIX   "so"
+        typedef void*    DL_HDL;
+        typedef void*    DL_ADR;
+#   endif
+
+    typedef int THR_ERR_TYPE;
 
 #   define WCHAR            wchar_t
 #   define cU_HELP(par)     L##par

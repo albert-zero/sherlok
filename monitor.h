@@ -239,6 +239,7 @@ private:
     TCallstack      *mCallstack;
     jlong            mGCTime;
     jint             mGCNr;
+    jint             mGCUsageStart;
     jlong            mFrequency;
     jclass           mMxFact;
     jobject          mMxBean;
@@ -1430,6 +1431,7 @@ public:
                 aTag->addAttribute(cU("Name"),  asName.str());
                 aTag->addAttribute(cU("Info"),  cU("int[]"));
                 aTag->addAttribute(cU("Value"), asResult.str());
+                aJni->ReleaseIntArrayElements(jArray, jElements, 0);
 
                 break;
             }
@@ -1452,6 +1454,7 @@ public:
                 aTag->addAttribute(cU("Info"),  cU("byte[]"));
                 aTag->addAttribute(cU("Value"), asResult.str());
 
+                aJni->ReleaseByteArrayElements(jArray, jElements, 0);
                 break;
             }
             case cR('C'): { /* SAP_UC   */
@@ -1472,6 +1475,8 @@ public:
                 aTag->addAttribute(cU("Name"),  asName.str());
                 aTag->addAttribute(cU("Info"),  cU("char[]"));
                 aTag->addAttribute(cU("Value"), asResult.str());
+
+                aJni->ReleaseCharArrayElements(jArray, jElements, 0);
                 break;
             }
             case cR('S'): { /* short    */
@@ -1512,7 +1517,7 @@ public:
         aRootTag->setAttribute(aInx++, cU("NrCalls"),    TString::parseInt(aMethod->getNrCalls(), aBuffer),     PROPERTY_TYPE_INT); 
         aRootTag->setAttribute(aInx++, cU("Depth"),      TString::parseInt(aDepth,    aBuffer),                 PROPERTY_TYPE_INT); 
         aRootTag->setAttribute(aInx++, cU("ID"),         TString::parseHex((jlong)aMethod->getID(), aBuffer),   PROPERTY_TYPE_HIDDEN);
-        // aRootTag->setAttribute(aInx++, cU("ThreadId"),   TString::parseHex(aThreadID,  aBuffer));
+        aRootTag->setAttribute(aInx++, cU("ThreadId"),   TString::parseHex(aThreadID,  aBuffer));
         aRootTag->setAttribute(aInx++, cU("Info"),       aInfoText);
         
         if (mTracer->doTraceContention(-1)) {
@@ -3400,7 +3405,8 @@ public:
     // ----------------------------------------------------
     void dumpGC(
             jvmtiEnv *aJvmti,
-            JNIEnv   *aJni) {
+            JNIEnv   *aJni,
+            bool      aStart = false) {
 
         jclass           jClass;
         jmethodID        jMethod;
@@ -3460,6 +3466,13 @@ public:
             jInit   = aJni->CallLongMethod(jObject, jMethod);        
             break;
         }
+
+        if (aStart) {
+            mGCUsageStart = jUsed;
+            aThread->setProcessJni(false);
+            return;
+        }
+
         TXmlTag    aRootTag(cU("Trace"));
         TXmlWriter aWriter(XMLWRITER_TYPE_LINE);
             
@@ -3501,7 +3514,7 @@ public:
                 aCpuTime += aThread->getStoredCpuTime();
             }
         }
-    /*SAPUNICODEOK_CHARTYPE*/
+        /*SAPUNICODEOK_CHARTYPE*/
         aJvmti->Deallocate((unsigned char*)jThreads);
         return aCpuTime;
     }

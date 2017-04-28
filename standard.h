@@ -742,28 +742,15 @@ public:
     //! \param aString An initial character sequence.
     //! \param aBytes  The inital length of the interal buffer
     // ----------------------------------------------------------------
-    TString(const SAP_UC *aString, int aBytes = 0) {
-        mBytes     = 0;
-        mInsertPos = 0;
-        mA7String  = NULL;
-        mReference = false;
-        mString    = NULL;
-
-        if (aString != NULL) {
-            if (aBytes == 0) {
-                mBytes = (int)STRLEN(aString);
-            }
-            else {
-                mBytes = aBytes;
-            }
-
-            if (mBytes > 0) {
-                mString    = new SAP_UC[mBytes + 1];
-                mInsertPos = mBytes;
-                STRNCPY(mString, aString, mBytes, mBytes + 1);
-                mString[mBytes] = cU('\0');
-            }
-        }
+    TString(const SAP_UC *aString, int aBytes = 0): TString() {
+		if (aString == NULL) {
+			return;
+		}
+		aBytes  = max(aBytes, STRLEN(aString));
+		mBytes  = max(128, aBytes);
+		mString = new SAP_UC[mBytes + 1];
+		memsetU(mString, 0,  mBytes + 1);
+		STRNCPY(mString, aString, mBytes, mBytes + 1);
     }
     // ----------------------------------------------------------------
     // TString::TString
@@ -773,17 +760,10 @@ public:
     //! \param aString    The inital character sequence.
     //! \param aReference If \c TRUE TString handles the string argument as reference
     // ----------------------------------------------------------------
-    TString(const SAP_UC *aString, bool aReference) {
-        mBytes     = 0;
-        mInsertPos = 0;
-        mA7String  = NULL;
-        mReference = false;
-        mString    = NULL;
-
-        if (aString != NULL) {
-            mBytes     = STRLEN(aString);
-            mInsertPos = mBytes;
-            mString    = const_cast<SAP_UC *>(aString);
+    TString(SAP_UC *aString, bool aReference): TString(aString) {
+        if (aReference) {
+			delete[] mString;
+			mString    = aString;
             mReference = aReference;
         }
     }
@@ -795,23 +775,19 @@ public:
     //! \param aString1 The first part of an inital character sequence.
     //! \param aString2 The second part of an inital character sequence.
     // ----------------------------------------------------------------
-    TString(const SAP_UC *aString1, const SAP_UC *aString2, jlong aExt = 0) {
-        mBytes     = 0;
-        mInsertPos = 0;
-        mA7String  = NULL;
-        mReference = false;
-        mString    = NULL;
-
-        mBytes     = (int)(STRLEN(aString1) + STRLEN(aString2) + 16);
+    TString(const SAP_UC *aString1, const SAP_UC *aString2, jlong aExt = 0): TString() {
+		SAP_UC aBuffer[16];
+		mBytes     = (int)(STRLEN(aString1) + STRLEN(aString2) + sizeof(aBuffer) + 4);
         mString    = new SAP_UC [mBytes + 1];
-        STRCPY(mString, aString1, mBytes + 1);
-        STRCAT(mString, cU("."),  mBytes + 1);
-        STRCAT(mString, aString2, mBytes + 1);
+		memsetU(mString, 0, mBytes + 1);
+
+        STRCPY(mString, aString1, mBytes);
+        STRCAT(mString, cU("."),  mBytes);
+        STRCAT(mString, aString2, mBytes);
 
         if (aExt > 0) {
-            SAP_UC aBuffer[16];
-            concat(cU("_"));
-            concat(TString::parseInt(aExt, aBuffer));
+			STRCAT(mString, cU("_"), mBytes);
+			STRCAT(mString, TString::parseInt(aExt, aBuffer), mBytes);
         }
         mInsertPos = pcount();
     }
@@ -819,21 +795,16 @@ public:
     // TString::TString
     //! Copy Constructor
     // ----------------------------------------------------------------
-    TString(TString &aStr) {
-        mBytes     = 0;
-        mInsertPos = 0;
-        mA7String  = NULL;
-        mReference = false;
-        mString    = NULL;
-
-        if (aStr.mBytes > 0 &&
-            aStr.mString != NULL) {
-            mBytes     = aStr.mBytes;
-            mString    = new SAP_UC [mBytes + 1];
-            mInsertPos = mBytes;
-            STRCPY(mString, aStr.mString, mBytes + 1);
-        }
+    TString(TString &aStr) : TString() {
+		if (aStr.mBytes == 0) {
+			return;
+		}
+		mBytes  = aStr.mBytes;
+		mString = new SAP_UC[mBytes + 1];
+		memsetU(mString, 0, mBytes + 1);
+		STRNCPY(mString, aStr.mString, mBytes, mBytes + 1);
     }
+
     // ----------------------------------------------------------------
     // TString::TString
     //! \brief Constructor for jstring
@@ -842,12 +813,7 @@ public:
     //! \param jEnv    The JNI environment
     //! \param jString The inital JNI string
     // ----------------------------------------------------------------
-    TString(JNIEnv *jEnv, jstring jString) {
-        mBytes     = 0;
-        mInsertPos = 0;
-        mA7String  = NULL;
-        mReference = false;
-        mString    = NULL;
+    TString(JNIEnv *jEnv, jstring jString): TString() {
         assign(jEnv, jString);
     }
     // ----------------------------------------------------------------
@@ -887,10 +853,10 @@ public:
         
         int aCpyBytes  = STRLEN(aBuffer);
         
-        if (mBytes < aCpyBytes || mString == NULL) {
+        if (mBytes < aCpyBytes) {
             if (mReference) {
                 ERROR_OUT(cU("TString::operator="), aCpyBytes);
-                aCpyBytes = max(0, mBytes-1);
+				return;
             }
             else {
                 if (mString != NULL) {
@@ -898,12 +864,12 @@ public:
                 }
                 mBytes  = max(32, aCpyBytes + 1);
                 mString = new SAP_UC[mBytes + 1];
+				memsetU(mString, 0,  mBytes + 1);
             }
         }
 
-        STRNCPY(mString, aBuffer, aCpyBytes, mBytes+1);
-        mString[aCpyBytes] = cU('\0');
-        mInsertPos         = aCpyBytes;
+        STRNCPY(mString, aBuffer, aCpyBytes, mBytes + 1);
+        mInsertPos  = aCpyBytes;
     }
     // ----------------------------------------------------------------
     // TString::moveCursor
@@ -1528,7 +1494,7 @@ public:
             }
             mBytes = aBytes + aLenInsert;
             SAP_UC *aNewString = new SAP_UC [mBytes + 1];
-            memsetU(aNewString, cU('\0'), mBytes + 1);
+            memsetU(aNewString, 0, mBytes + 1);
 
             if (mString != NULL) {
                 STRCPY(aNewString, mString, mBytes + 1);
@@ -1609,42 +1575,35 @@ public:
         int aStrLen = 0;
         int aNeeded = 0;
         int aCpyLen = 0;
-        SAP_UC *aNewStr = NULL;
 
-        if (mString != NULL) {
-            aStrLen = (int)STRLEN(mString);
-        }
-        else {
-            mBytes = 0;
-        }
+		if (aStr == 0) {
+			return;
+		}
+		
+		if (mBytes == 0) {
+			mBytes  = max(128, (int)STRLEN(aStr) + 1);
+			mString = new SAP_UC[mBytes + 1];
+			memsetU(mString, 0,  mBytes + 1);
+			STRCPY(mString, aStr, mBytes);
+			return;
+		}
 
-        if (aStr == NULL || aStr[0] == cU('\0')) {
-            return;
-        }
-        aCpyLen = (int)STRLEN(aStr);
-        aNeeded = aStrLen + aCpyLen + 1;
-
-        if (mBytes < aNeeded) {
-            if (mReference) {
-                ERROR_OUT(cU("concat"), mBytes);
-                return;
-            }
-            aNewStr = new SAP_UC [aNeeded + 128];
-            memsetU(aNewStr, cU('\0'), aNeeded + 128);
-
-            if (mString != NULL) {
-                STRCPY(aNewStr, mString, aNeeded + 128);
-                delete [] mString;
-            }
-            STRNCAT(aNewStr, aStr, aCpyLen + 1, aNeeded + 128);
-            mInsertPos = aNeeded;
-            mBytes     = aNeeded + 128;
-            mString    = aNewStr;
-        }
-        else {
-            STRNCAT(mString, aStr, aCpyLen + 1, mBytes);
-            mInsertPos = aNeeded - 1;
-        }
+		aNeeded = (int)STRLEN(aStr) + STRLEN(mString) + 1;
+		if (aNeeded >= mBytes) {
+			if (mReference) {
+				ERROR_OUT(cU("concat"), mBytes);
+				return;
+			}
+			delete[] mString;
+			mBytes      = aNeeded + 1;
+			mString     = new SAP_UC[mBytes + 1];
+			memsetU(mString, 0, mBytes + 1);
+			STRCPY(mString, aStr, mBytes);
+			mInsertPos  = aNeeded - 1;
+			return;
+		}
+		STRCAT(mString, aStr, mBytes);
+        mInsertPos = aNeeded - 1;
     }
     // ----------------------------------------------------------------
     // TString::concat
@@ -1652,10 +1611,10 @@ public:
     //! \param aChar The character to append
     // ----------------------------------------------------------------
     void concat(const SAP_UC aChar) {
-        SAP_UC aStr[2];
-        aStr[0] = aChar;
-        aStr[1] = 0;
-        concat(aStr);
+		SAP_UC xChar[2];
+		xChar[0] = aChar;
+		xChar[1] = cU('\0');
+		concat(xChar);
     }
     // ----------------------------------------------------------------
     // TString::concatPathExt
@@ -1760,7 +1719,7 @@ public:
             }
             mBytes  = aLen;
             mString = new SAP_UC [mBytes + 1];
-            memsetU(mString, cU('\0'), mBytes + 1);
+            memsetU(mString, 0, mBytes);
         }
 
         for (i = 0; i < aLen && i < (jsize)mBytes; i++) {
@@ -1790,7 +1749,11 @@ public:
         if (jLen == 0) {
             return;
         }
-        jBuffer = new jchar [jLen + 1];
+		mBytes  = jLen + 1;
+		jBuffer = new jchar [mBytes];
+		mString = new SAP_UC[mBytes + 1];
+		memsetU(mString, 0,  mBytes + 1);
+
         jEnv->GetStringRegion(jString, 0, jLen, jBuffer); 
         assign(jBuffer, jLen);
         delete [] jBuffer;
@@ -1814,15 +1777,15 @@ public:
             }
             mBytes  = (int)max(32, 4 * (aLen + 1));
             mString = new SAP_UC[mBytes + 1];
-        }
+			memsetU(mString, 0,  mBytes + 1);
+		}
 
         for (int i = 0; i < aLen; i++) {
             aStrStream << cU("\\x");
             aStrStream << hex << setfill(cU('0')) << setw(2)  << (aBuffer[i] & 0xff);
         }
         aStrStream << ends;
-
-        STRNCPY(mString, aStrStream.str().c_str(), mBytes, mBytes + 1);
+        STRNCPY(mString, aStrStream.str().c_str(), mBytes, mBytes);
     }
     // ----------------------------------------------------------------
     // TString::assignR
@@ -1851,7 +1814,7 @@ public:
             }
             mBytes  = (int)max((int)32, (int)(aLen + 1));
             mString = new SAP_UC [mBytes + 1];
-            memsetU(mString, 0, mBytes + 1);
+            memsetU(mString, 0,   mBytes + 1);
         }
 
         for (size_t i = 0; i < aLen; i++) {

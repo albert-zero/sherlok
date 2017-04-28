@@ -5,6 +5,7 @@
 // Date  : 27.08.2008
 // Abstract:
 //    Profiler interface for C,C++
+//    Options on Linux -pthread -std=gnu++11 -lstdc++ 
 //
 // Copyright (C) 2015  Albert Zedlitz
 //
@@ -27,27 +28,32 @@
 #include "cjvmti.h"
 #include "monitor.h"
 #include "command.h"
-
-#if defined (PROFILE_CPP)
+#include  <thread>
+		
+#if defined (PROFILE_SAP_CPP)
 #   include "sapthr.h"
-#else
-typedef unsigned long /*TID*/ THR_ID_TYPE;
+#elif defined (PROFILE_STD_CPP)
+#   include <thread>
+#   include <mutex>
+#   include <condition_variable>
 #endif
 // -----------------------------------------------------------------
 // CtiMonitor::CtiMonitor
 //! CtiMontior replaces JVMTI monitor in case CTI is active 
 // -----------------------------------------------------------------
-CtiMonitor::CtiMonitor(                         /*SAPUNICODEOK_CHARTYPE*/ 
-            const char *aName) {
+CtiMonitor::CtiMonitor(/*SAPUNICODEOK_CHARTYPE*/ const char *aName) {
+#if defined (PROFILE_SAP_CPP)
+    THR_ERR_TYPE    cResult;
+    TString         aLockName;        
 
-#       if defined (PROFILE_CPP)
-        THR_ERR_TYPE    cResult;
-        TString         aLockName;        
-
-        aLockName.assignR(aName, STRLEN_A7(aName));
-        cResult = ThrRecMtxInit(&mMonitor, const_cast<SAP_UC*>(aLockName.str()));
-        cResult = ThrEvtInit(&mEvent);
-#       endif
+    aLockName.assignR(aName, STRLEN_A7(aName));
+    cResult = ThrRecMtxInit(&mMonitor, const_cast<SAP_UC*>(aLockName.str()));
+    cResult = ThrEvtInit(&mEvent);
+#elif defined (PROFILE_STD_CPP)
+    mMonitor  = new std::recursive_mutex();
+    mEventMtx = new std::mutex();
+    mEvent    = new std::condition_variable();
+#endif
 };
 
 // -----------------------------------------------------------------
@@ -55,64 +61,78 @@ CtiMonitor::CtiMonitor(                         /*SAPUNICODEOK_CHARTYPE*/
 //! \brief destructor
 // -----------------------------------------------------------------
 CtiMonitor::~CtiMonitor() {
-#       if defined(PROFILE_CPP)
-        THR_ERR_TYPE    cResult = THR_ERR_OK;
-        cResult = ThrRecMtxDelete(&mMonitor);
-        cResult = ThrEvtDelete(&mEvent);
-#       endif
+#if defined(PROFILE_SAP_CPP)
+    THR_ERR_TYPE    cResult = THR_ERR_OK;
+    cResult = ThrRecMtxDelete(&mMonitor);
+    cResult = ThrEvtDelete(&mEvent);
+#elif defined (PROFILE_STD_CPP)
+    delete mMonitor;
+    delete mEventMtx;
+    delete mEvent;
+#endif
 };
 
 // -----------------------------------------------------------------
 // -----------------------------------------------------------------
 jvmtiError CtiMonitor::enter(bool aExclusive) {
-#       if defined(PROFILE_CPP)
-        THR_ERR_TYPE    cResult = THR_ERR_OK;
-        cResult = ThrRecMtxLock(&mMonitor);
-#       endif
-        return JVMTI_ERROR_NONE;
+#if defined(PROFILE_SAP_CPP)
+    THR_ERR_TYPE    cResult = THR_ERR_OK;
+    cResult = ThrRecMtxLock(&mMonitor);
+#elif defined (PROFILE_STD_CPP)
+    mMonitor->lock();
+#endif
+	return JVMTI_ERROR_NONE;
 };
 
 // -----------------------------------------------------------------
 // -----------------------------------------------------------------
 jvmtiError CtiMonitor::exit() {
-#       if defined(PROFILE_CPP)
-        THR_ERR_TYPE    cResult = THR_ERR_OK;
-        cResult = ThrRecMtxUnlock(&mMonitor);
-#       endif
-        return JVMTI_ERROR_NONE;
+#if defined(PROFILE_SAP_CPP)
+    THR_ERR_TYPE cResult = ThrRecMtxUnlock(&mMonitor);
+#elif defined (PROFILE_STD_CPP)
+    mMonitor->unlock();
+#endif
+	return JVMTI_ERROR_NONE;
 };
 
 // -----------------------------------------------------------------
 // -----------------------------------------------------------------
 jvmtiError CtiMonitor::wait(jlong aTime) {
-        jvmtiError jResult = JVMTI_ERROR_NONE;
-
-#       if defined(PROFILE_CPP)
-        THR_ERR_TYPE    cResult = THR_ERR_OK;
-        jResult = this->exit();
-        cResult = ThrEvtWait(&mEvent, (int)aTime);
-        cResult = ThrEvtReset(&mEvent);
-        jResult = this->enter();
-#       endif
-
-        return jResult;
+#if defined(PROFILE_SAP_CPP)
+    THR_ERR_TYPE cResult = THR_ERR_OK;
+    cResult = ThrEvtWait(&mEvent, (int)aTime);
+    cResult = ThrEvtReset(&mEvent);
+#elif defined (PROFILE_STD_CPP)
+    std::unique_lock<std::mutex> aUniqueLock(*mEventMtx);
+    
+    if (aTime < 0) {
+        mEvent->wait(aUniqueLock);
+    }
+    else {
+        std::chrono::milliseconds aTimeSpan(aTime);
+        auto aTimeInterval = std::chrono::system_clock::now() + aTimeSpan;
+        mEvent->wait_until(aUniqueLock, aTimeInterval);
+    }
+#endif
+	return JVMTI_ERROR_NONE;
 };
 
 // -----------------------------------------------------------------
 // -----------------------------------------------------------------
 jvmtiError CtiMonitor::notify() {
-#       if defined(PROFILE_CPP)
-        THR_ERR_TYPE    cResult = THR_ERR_OK;
-        cResult = ThrEvtSet(&mEvent);
-#       endif
-        return JVMTI_ERROR_NONE;
+#if defined(PROFILE_SAP_CPP)
+    cResult = ThrEvtSet(&mEvent);
+#elif defined (PROFILE_STD_CPP)
+    mEvent->notify_all();
+#endif
+	return JVMTI_ERROR_NONE;
 };
 
 
 // -----------------------------------------------------------------
 // -----------------------------------------------------------------
 TObject::TObject(jclass jClass) {
-        setClass(jClass);
+    setClass(jClass);
 };
 // -----------------------------------------------------------------
 // -----------------------------------------------------------------
@@ -171,35 +191,35 @@ extern "C" jvmtiError JNICALL CtiSetThreadLocalStorage(
         jvmtiEnv    *aJvmti, 
         jthread      jThread, 
         const void  *aData) {
-    
-#   if defined(PROFILE_CPP)
-        THashThreads::iterator aPtr;
-        void            *pData   = const_cast<void*>(aData);
-        TJvmtiEnv       *aCtiJti = TJvmtiEnv::getInstance();
-        jobject          cThread;
-        THR_KEY_TYPE     aKey    = THR_INVALID_KEY;
-        THR_ERR_TYPE     cResult;
-        TMonitorThread  *aThread = NULL;
 
-        if (jThread != NULL) {
-            cThread = reinterpret_cast<jobject>(jThread);
-        }
-        else {
-            cThread = (jobject)ThrGetCurrentId();
-        }
+    THR_ID_TYPE cThread;
 
-        aPtr = aCtiJti->mThreads.find((jlong)cThread);
+#if defined(PROFILE_SAP_CPP)
+    cThread = (long)ThrGetCurrentId();
+#elif defined(PROFILE_STD_CPP)
+    std::hash<std::thread::id> aHashId;
+    cThread = (THR_ID_TYPE)aHashId(std::this_thread::get_id());
+#endif
 
-        if (aPtr == aCtiJti->mThreads.end()) {
-            cResult = ThrKeyGet(&aKey, NULL);
-            cResult = ThrKeyVarSet(&aKey, pData);
+    THashThreads::iterator aPtr;
+    void            *pData   = const_cast<void*>(aData);
+    TJvmtiEnv       *aCtiJti = TJvmtiEnv::getInstance();
+    THR_ERR_TYPE     cResult;
+    TMonitorThread  *aThread = NULL;
 
-            aThread = reinterpret_cast<TMonitorThread*>(pData);    
-            aPtr    = aCtiJti->mThreads.insert((jlong)cThread, aThread, aKey);
-        }
-#   endif
+    if (jThread != NULL) {
+        cThread = reinterpret_cast<THR_ID_TYPE>(jThread);
+    }
+
+    aPtr = aCtiJti->mThreads.find(cThread);
+
+    if (aPtr == aCtiJti->mThreads.end()) {
+        aThread = reinterpret_cast<TMonitorThread*>(pData);    
+        aPtr    = aCtiJti->mThreads.insert((jlong)cThread, aThread);
+    }
     return JVMTI_ERROR_NONE;
 }
+
 // -----------------------------------------------------------------
 // -----------------------------------------------------------------
 extern "C" jvmtiError JNICALL CtiGetThreadLocalStorage(
@@ -207,31 +227,33 @@ extern "C" jvmtiError JNICALL CtiGetThreadLocalStorage(
         jthread      jThread, 
         void       **aData) {
     
+    THR_ID_TYPE cThread;
     if (aData == NULL) {
         return JVMTI_ERROR_NULL_POINTER;
     }
     *aData = NULL;
 
-#   if defined(PROFILE_CPP)
-        TJvmtiEnv       *aCtiJti    = TJvmtiEnv::getInstance();
-        TMonitorThread  *aThread    = NULL;
-        jobject          cThread;
-        THashThreads::iterator aPtr;
+#if defined(PROFILE_SAP_CPP)
+    cThread = (long)ThrGetCurrentId();
+#elif defined(PROFILE_STD_CPP)
+    std::hash<std::thread::id> aHashId;
+    cThread = (THR_ID_TYPE)aHashId(std::this_thread::get_id());
+#endif
+
+    TJvmtiEnv       *aCtiJti    = TJvmtiEnv::getInstance();
+    TMonitorThread  *aThread    = NULL;
+    THashThreads::iterator aPtr;
        
-        if (jThread != NULL) {
-            cThread = reinterpret_cast<jobject>(jThread);
-        }
-        else {
-            cThread = (jobject)ThrGetCurrentId();
-        }
+    if (jThread != NULL) {
+        cThread = reinterpret_cast<THR_ID_TYPE>(jThread);
+    }
 
-        aPtr = aCtiJti->mThreads.find((jlong)cThread);
+    aPtr = aCtiJti->mThreads.find((jlong)cThread);
 
-        if (aPtr != aCtiJti->mThreads.end()) {
-            aThread = aPtr->aValue;
-            *aData  = reinterpret_cast<void *>(aThread);
-        }
-#   endif
+    if (aPtr != aCtiJti->mThreads.end()) {
+        aThread = aPtr->aValue;
+        *aData  = reinterpret_cast<void *>(aThread);
+    }
     return JVMTI_ERROR_NONE;
 }
 
@@ -241,6 +263,14 @@ extern "C" jvmtiError JNICALL CtiGetThreadInfo(
         jvmtiEnv        *aJvmti, 
         jthread          jThread, 
         jvmtiThreadInfo *aInfo) {
+
+    THR_ID_TYPE cThread;
+#if defined(PROFILE_SAP_CPP)
+    cThread = (long)ThrGetCurrentId();
+#elif defined(PROFILE_STD_CPP)
+    std::hash<std::thread::id> aHashId;
+    cThread = (THR_ID_TYPE)aHashId(std::this_thread::get_id());
+#endif
 
     if (aInfo == NULL) {
         return JVMTI_ERROR_NULL_POINTER;
@@ -252,20 +282,14 @@ extern "C" jvmtiError JNICALL CtiGetThreadInfo(
     aInfo->thread_group         = NULL;
     aInfo->context_class_loader = NULL;
 
-#   if defined(PROFILE_CPP)
-        TString          aThreadName(cU("NativeThread-"));
-        SAP_UC           aBuffer[THR_ID_STRMAXLEN];
-        jobject          cThread;
+    TString          aThreadName(cU("NativeThread-"));
+    SAP_UC           aBuffer[128];
 
-        if (jThread != NULL) {
-            cThread = reinterpret_cast<jobject>(jThread);
-        }
-        else {
-            cThread = (jobject)ThrGetCurrentId();
-        }
-        aThreadName.concat(TString::parseInt((jlong)cThread, aBuffer));
-        aInfo->name = const_cast<SAP_A7 *>(aThreadName.a7_str(true));
-#   endif
+    if (jThread != NULL) {
+        cThread = reinterpret_cast<THR_ID_TYPE>(jThread);
+    }
+    aThreadName.concat(TString::parseInt((jlong)cThread, aBuffer));
+    aInfo->name = const_cast<SAP_A7 *>(aThreadName.a7_str(true));
     return JVMTI_ERROR_NONE;
 }
 // -----------------------------------------------------------------
@@ -347,7 +371,7 @@ extern "C" jint JNICALL CtiOnEnterMethod(
         
         THR_ID_TYPE cThread = 0;
 
-#ifdef PROILE_CPP        
+#ifdef PROILE_SAP_CPP        
         cThread = ThrGetCurrentId();
 #endif
         aThreadName.concat(TString::parseInt((int)cThread, aBuffer));
@@ -635,7 +659,7 @@ extern "C" unsigned long CtiThreadFunction(
     unsigned long        aExitCode  = 0;
     jthread              jThread    = NULL;
     
-#ifdef PROFILE_CPP
+#ifdef PROFILE_SAP_CPP
     THR_ID_TYPE          cThread    = GetCurrentThreadId();
     TJvmtiEnv           *aCtiJti    = TJvmtiEnv::getInstance();
     jvmtiStartFunction  jThreadFunction;
@@ -644,9 +668,9 @@ extern "C" unsigned long CtiThreadFunction(
     jThreadFunction = (jvmtiStartFunction)(aThreadFunction);
     jThread         = reinterpret_cast<jthread>(cThread);
 
-    aMonitor->onThreadStart(aCtiJti->mCtiJvmti, aCtiJti->mCtiJni, jThread);
+    // aMonitor->onThreadStart(aCtiJti->mCtiJvmti, aCtiJti->mCtiJni, jThread);
     jThreadFunction(aCtiJti->mCtiJvmti, aCtiJti->mCtiJni, NULL);
-    aMonitor->onThreadEnd(aCtiJti->mCtiJvmti, aCtiJti->mCtiJni, jThread);
+    // aMonitor->onThreadEnd(aCtiJti->mCtiJvmti, aCtiJti->mCtiJni, jThread);
 #endif
     return 0;
 }
@@ -658,7 +682,7 @@ extern "C" jvmtiError CtiRunAgentThread(
         const void          *aArgs,
         jint                 aPriority) {
 
-#   if defined(PROFILE_CPP)
+#   if defined(PROFILE_SAP_CPP)
         THR_ERR_TYPE aResult;
         THR_ATTRIB   aThrAttr;
         THR_ID_TYPE  cThread;
@@ -666,7 +690,11 @@ extern "C" jvmtiError CtiRunAgentThread(
         aThrAttr.scope              = THR_SCOPE_DEFAULT;
         aThrAttr.detachedstate      = THR_DETACHEDSTATE_DEFAULT;
         aThrAttr.stacksize          = THR_STACKSIZE_DEFAULT;
-        aResult                     = ThrCreate2(&aThrAttr, CtiThreadFunction, (void*)jThreadFunction, &cThread);
+        aResult                     = ThrCreate2(&aThrAttr, CtiThreadFunction, (void*)jThreadFunction);
+#   else if defined(PROFILE_STD_CPP)
+        jThread = NULL;
+        TJvmtiEnv  *aCtiJti = TJvmtiEnv::getInstance();
+        std::thread aThread(CtiThreadFunction, (void*)jThreadFunction);
 #   endif    
     return JVMTI_ERROR_NONE;
 }

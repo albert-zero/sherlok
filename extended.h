@@ -2235,13 +2235,13 @@ public:
     //! \param aString The resultant string.
     // ------------------------------------------------------------
     void dumpValues(TString *aString, TValues *aValues) {
-        TValues::iterator aPtr = aValues->begin();
+		/**/ return;
+		TValues::iterator aPtr = aValues->begin();
         *aString = cU("");
-
         if (aPtr == aValues->end()) {
             return;
         }
-        aString->concat(*aPtr);
+        *aString = *aPtr;
         aPtr = aValues->next();
         while (aPtr != aValues->end()) {
             aString->concat(cU(","));

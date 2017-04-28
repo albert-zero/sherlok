@@ -131,7 +131,9 @@ extern "C" void JNICALL doTelnetThread (
         if (!aConsole->checkState()) {
             while (aConsole->open()) {
                 if (aSecurity->login()) {
-                    aConsole->login();
+
+
+					aConsole->login();
                     break;
                 }
                 SLEEP(1);

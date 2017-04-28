@@ -24,11 +24,13 @@
 #ifndef CTI_H
 #define CTI_H
 #include <jni.h>
+#include <string>
 
 #if defined (__cplusplus)
     #define USE_CONT_LOCTIME
     #define SAPUC_H_WITH_statU 
     #define CTI_VERSION_1 0x30000001
+    #define CTI_VERSION_2 0x30000002
 
     typedef void (JNICALL *TCtiCallback)(/*SAPUNICODEOK_CHARTYPE*/const char *aTrace);        
     
@@ -95,6 +97,9 @@
             jint(JNICALL *onVMDeath)();
 
             jint(JNICALL *registerCallback)(TCtiCallback aCallback);
+            
+            /*SAPUNICODEOK_CHARTYPE*/
+            std::string (JNICALL *toString) (char *aNameList, char *aSignature, ...);
         };
 
         // -----------------------------------------------------------------
@@ -107,36 +112,40 @@
             static TCtiInterface *mCti;
 
         public:
-            TCtiProfiler(int argc, /*SAPUNICODEOK_CHARTYPE*/ char *argv[]);
+            TCtiProfiler(                       /*SAPUNICODEOK_CHARTYPE*/
+                const char  *aPackage,          /*SAPUNICODEOK_CHARTYPE*/
+                const char  *aClass,
+                int         *argc,              
+                wchar_t     *argv[]);
+
             TCtiProfiler(
                 jmethodID   *jMethod,           /*SAPUNICODEOK_CHARTYPE*/
                 const char  *aPackage,          /*SAPUNICODEOK_CHARTYPE*/
                 const char  *aClass,            /*SAPUNICODEOK_CHARTYPE*/
                 const char  *aMethod,           /*SAPUNICODEOK_CHARTYPE*/
-                const char  *aSignature);
+                const char  *aSignature, ...);
 
             ~TCtiProfiler();
 
             static TCtiInterface *getCti();
-            void * ctiAlloc(size_t aSize, jmethodID jMethod, int aLine);
-            void * ctiCalloc(size_t aSize, jmethodID jMethod, int aLine);
-            void * ctiRealloc(void *aPtr, size_t aSize, jmethodID jMethod, int aLine);
-            void   ctiRegisterObject(void *aPtr, size_t aSize, int aLine);
-            void   ctiUnregisterObject(void *aPtr);
-            void   ctiDelete(void *aPtr);
-
+            void * ctiAlloc             (size_t aSize, jmethodID jMethod, int aLine);
+            void * ctiCalloc            (size_t aSize, jmethodID jMethod, int aLine);
+            void * ctiRealloc           (void *aPtr, size_t aSize, jmethodID jMethod, int aLine);
+            void   ctiRegisterObject    (void *aPtr, size_t aSize, int aLine);
+            void   ctiUnregisterObject  (void *aPtr);
+            void   ctiDelete            (void *aPtr);
         };
     }
-    #define CCQ_SHERLOK_FCT_BEGIN(aPackage, aClass, aMethod, aSignature) { int __aRes; void *_aMem; static jmethodID _aMethodID = 0; TCtiProfiler _aProfiler(&_aMethodID, aPackage, aClass, aMethod, aSignature); {
-    #define CCQ_SHERLOK_FCT_END                                          }}
+    #define CCQ_SHERLOK_FCT_BEGIN(aPackage, aClass, aMethod, aSignature,...) { static jmethodID _aMethodID = 0; TCtiProfiler _aProfiler(&_aMethodID, aPackage, aClass, aMethod, aSignature,  ##__VA_ARGS__); {
+    #define CCQ_SHERLOK_FCT_END  }}
         
     extern "C" JNIEXPORT jint (JNICALL *AgentOnLoad)( /*SAPUNICODEOK_CHARTYPE*/
             const char      *aOptions, 
             TCtiInterface  **CtiEnv,
             jint             aVersion);
 
-    #define CCQ_SHERLOK_MAIN_BEGIN(argc, argv) { TCtiProfiler _aProfiler(argc, argv); {
-    #define CCQ_SHERLOK_MAIN_END               }};                  
+    #define CCQ_SHERLOK_BEGIN(aPackage, aClass, aArgc, aArgv) { TCtiProfiler _aProfiler(aPackage, aClass, aArgc, aArgv); {
+    #define CCQ_SHERLOK_END }};                  
 
     // namespace stl { extern "C" double hypot (double x, double y) { return 0; } }
 
@@ -162,14 +171,12 @@
         #undef  free
         #define free(aPtr)            _aProfiler.ctiDelete(aPtr)
         
-        #define ipl_Malloc(_type, _size, _id) ( _aMem = ipl_Malloc(_type, _size, _id), _aProfiler.ctiRegisterObject(_aMem, _size, __LINE__), _aMem )
-        #define ipl_Free(_type, _ptr, _id)    ( ipl_Free(_type, _ptr, _id), _aProfiler.ctiUnregisterObject(_ptr) )
     #endif
 #else    
     #define CCQ_SHERLOK_FCT_BEGIN(aPackage, aClass, aMethod, aSignature) {{
     #define CCQ_SHERLOK_FCT_END                                          }}
             
-    #define CCQ_SHERLOK_MAIN_BEGIN(argc, argv) {{
+    #define CCQ_SHERLOK_MAIN(aPackage, aClass, argc, argv) {{
     #define CCQ_SHERLOK_MAIN_END               }}
 #endif
 #endif

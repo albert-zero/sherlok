@@ -33,6 +33,10 @@
 #include "tracer.h"
 #include "profiler.h"
 
+#if defined(PROFILE_STD_CPP)
+    #include <mutex>
+    #include <condition_variable>
+#endif
 // -----------------------------------------------------------------
 // -----------------------------------------------------------------
 typedef THash<jlong, TMonitorThread *> THashThreads;
@@ -68,15 +72,19 @@ extern "C" jint JNICALL CtiOnEnterMethod(
 // -----------------------------------------------------------------
 class CtiMonitor {
 private:
-#   if defined(PROFILE_CPP)
-    THR_EVT_TYPE    mEvent;     //!< The event handle for RawMonitorWait
-    THR_RECMTX_TYPE mMonitor;   //!< The mutex handle for native mutex support
+#   if defined(PROFILE_SAP_CPP)
+        THR_EVT_TYPE    mEvent;     //!< The event handle for RawMonitorWait
+        THR_RECMTX_TYPE mMonitor;   //!< The mutex handle for native mutex support
+#   elif defined (PROFILE_STD_CPP)
+        std::recursive_mutex     *mMonitor;
+        std::condition_variable  *mEvent;
+        std::mutex               *mEventMtx;
 #   endif
+
 public:
     // -----------------------------------------------------------------
     // -----------------------------------------------------------------
-    CtiMonitor(                /*SAPUNICODEOK_CHARTYPE*/ 
-            const char *aName);
+    CtiMonitor( /*SAPUNICODEOK_CHARTYPE*/ const char *aName);
     // -----------------------------------------------------------------
     // -----------------------------------------------------------------
     ~CtiMonitor();

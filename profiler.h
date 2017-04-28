@@ -215,7 +215,8 @@ public:
 
         if (aEntry != NULL) {
             int aSize   = STRLEN(aEntry) + 1;
-            mEntry      = new SAP_UC [aSize];
+            mEntry      = new SAP_UC [aSize + 1];
+			memsetU(mEntry, 0, aSize + 1);
             STRCPY(mEntry, aEntry, aSize + 1);
 
             parseEntry();
@@ -262,9 +263,10 @@ private:
         if (mContext == NULL) {
             return;
         }
-        if (mStackContext != NULL) 
-            delete mStackContext;
-        mStackContext = new TValues(5);
+		if (mStackContext != NULL) {
+			delete mStackContext;
+		}
+        mStackContext = new TValues(8);
         TString aString(mContext);
         aString.split(mStackContext, cU('/'));
     }

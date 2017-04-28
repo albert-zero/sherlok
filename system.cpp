@@ -22,7 +22,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // -----------------------------------------------------------------
 // Java native interface
-#include "ccqcovrun.h"
+#include "cti.h"
 #include "ptypes.h"
 #include "standard.h"
 #include "extended.h"
@@ -456,7 +456,7 @@ bool TSystem::openSocket(SOCKET *aHostSocket, unsigned short aPort, const SAP_UC
 #   endif
     
     /*CCQ_IPV6_SUPPORT_OK*/
-    aResult = bind(*aHostSocket, reinterpret_cast<struct sockaddr *>(&aServerAddr), (int)sizeofR(struct sockaddr_in));
+    aResult = ::bind(*aHostSocket, reinterpret_cast<struct sockaddr *>(&aServerAddr), (int)sizeofR(struct sockaddr_in));
     if (aResult != 0) {
         ERROR_OUT(cU("bind socket to port"), (int)aResult);
         return false;
@@ -573,6 +573,55 @@ SAP_UC *TString::reverse(SAP_UC *aBuffer) {
     }
     return aBuffer;
 }
+
+// ----------------------------------------------------------------
+// ----------------------------------------------------------------
+SAPRETURN CtiDlLoadLib(const SAP_UC* aLibName, DL_HDL* aHandle) {
+    TString aStrName(aLibName);
+
+#if defined (PROFILE_SAP_CPP)
+    DlLoadLib2((const SAP_UC *)aLibName, aHandle, DL_RTLD_LAZY | DL_RTLD_GLOBAL);
+#elif defined(_WINDOWS)
+    *aHandle = LoadLibrary(aLibName);
+    if (*aHandle == NULL) {
+        return GetLastError();
+    }
+    return 0;
+#else
+    *aHandle = dlopen(aStrName.a7_str(), RTLD_LAZY | RTLD_GLOBAL);
+    if (*aHandle == NULL) {
+        return 1;
+    }
+    return 0;
+#endif
+}
+
+// ----------------------------------------------------------------
+// ----------------------------------------------------------------
+SAPRETURN CtiDlLoadFunction(DL_HDL aHandle, SAP_UC* aFunction, DL_ADR* aHdlFunction) {
+    TString aStrName(aFunction);
+
+#if defined (PROFILE_SAP_CPP)
+    DlLoadFunc(aHandle,  aFunction, 0, aHdlFunction);
+#elif defined (_WINDOWS)
+    *aHdlFunction = GetProcAddress(aHandle, aStrName.a7_str());
+    if (*aHdlFunction == NULL) {
+        return GetLastError();
+    }
+    return 0;
+#else
+    char *aError;
+    dlerror();
+    *aHdlFunction = dlsym(aHandle, aStrName.a7_str());
+
+    if ((aError = dlerror()) != NULL) {
+        return 1;
+    }
+    return 0;
+#endif
+}
+
+
 // ----------------------------------------------------------------
 // Implementation for static members 
 // ----------------------------------------------------------------
