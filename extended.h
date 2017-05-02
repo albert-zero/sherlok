@@ -24,7 +24,6 @@
 #ifndef EXTENDED_H
 #define EXTENDED_H
 
-
 // ----------------------------------------------------------------
 // Comandline commands
 // ----------------------------------------------------------------
@@ -1080,6 +1079,7 @@ private:
     TValues             *mHideFilter;           //!< ProfileHide
     TValues             *mTraceOptions;         
     TValues             *mExceptions;
+	TValues             *mLogOptions;
 
     TString              mHost;
     jlong                mMinClassSize;
@@ -1104,6 +1104,7 @@ private:
     bool                 mDoMonitor;            //!< Log memory consumption on class level
     bool                 mDoContention;
     bool                 mDumpOnExit;
+	bool                 mLogging;
     jint                 mLimitIO;
     jint                 mLimitHash;
     jint                 mLimitHistory;
@@ -1140,6 +1141,7 @@ private:
         mHideFilter             = new TValues(16);
         mTraceOptions           = new TValues(16);
         mExceptions             = new TValues(16);
+		mLogOptions             = new TValues(4);
 
         mTelnetPort             = 0;
         mTimerValue             = 0;
@@ -1196,6 +1198,7 @@ private:
         delete mTriggerFilter;
         delete mTraceOptions;
         delete mExceptions;
+		delete mLogOptions;
     }    
 public:
     // ------------------------------------------------------------
@@ -1653,7 +1656,16 @@ public:
             }
         } else if (aProperty->equalsKey(cU("Tracer"))) {
             aProperty->split(mTraceOptions, cU(','));
-        } else if (aProperty->equalsKey(cU("DumpLevel"))) {
+		} else if (aProperty->equalsKey(cU("Logger"))) {
+			//aProperty->split(mLogOptions, cU(','));
+			//TLogger *aLogger = TLogger::getInstance();
+			//if (STRCMP(aProperty->getValue(), cU("on")) == 0) {
+			//	aLogger->start();
+			//}
+			//if (STRCMP(aProperty->getValue(), cU("append")) == 0) {
+			//	aLogger->start(true);
+			//}
+		} else if (aProperty->equalsKey(cU("DumpLevel"))) {
             mDumpLevel = (short)aProperty->toInteger();
             if (mDumpLevel < 0 || mDumpLevel > 1)
                 mDumpLevel = 0;
@@ -2235,7 +2247,6 @@ public:
     //! \param aString The resultant string.
     // ------------------------------------------------------------
     void dumpValues(TString *aString, TValues *aValues) {
-		/**/ return;
 		TValues::iterator aPtr = aValues->begin();
         *aString = cU("");
         if (aPtr == aValues->end()) {

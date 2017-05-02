@@ -2464,12 +2464,12 @@ public:
         aEntry    = mProperties->getMonitorDebugEntry(aMethod->getClass()->getName(), aMethod->getName());
         aMethod->setContextDebug(aEntry);
         
-        aActivate = aActivate || (aEntry != NULL);
+		aActivate = aActivate || (aEntry != NULL);
 
         aEntry = mProperties->getMonitorMethodEntry(aMethod->getClass()->getName(), aMethod->getName());
         aMethod->setContextMonitor(aEntry);
         
-        aActivate = aActivate || (aEntry != NULL);
+		aActivate = aActivate || (aEntry != NULL);
 
         if (mProperties->doTrigger(aMethod->getClass()->getName(), aMethod->getName(), aMethod->getSignature()->str())) {
             if (mTraceEvent != NULL) {
@@ -2744,6 +2744,7 @@ public:
 
                 if (aCnt++ < mProperties->getLimit(LIMIT_IO)) {
                     aClass->dumpHeap(aRootTag);
+					mMemoryLeaks.insert(aPtrClass);
                 }
             }
         }
@@ -3099,7 +3100,7 @@ private:
 
         if (aClass != NULL) {
             if (aDumpHistory) {
-                aRootTag->addAttribute(cU("Detail"), cU("History"));
+                aRootTag->addAttribute(cU("Detail"), cU("HistoryGrowing"));
                 aClass->dumpHistory(aRootTag);
             }
             return;

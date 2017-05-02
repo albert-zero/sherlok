@@ -153,6 +153,7 @@ public:
         mCursorWrite  = 0;
         mSequenceRead = 0;
         mVector       = new _Ty [mSize + 1];
+		memset(mVector, 0, sizeof(_Ty));
         mMemory       = NULL;
         mVirtualDepth = 0;
         mHighMem      = 0;

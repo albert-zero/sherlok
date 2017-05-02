@@ -679,7 +679,7 @@ public:
                 break;
             case COMMAND_LML: {
                 TXmlTag aRootTag(cU("List"), XMLTAG_TYPE_NODE);
-                aRootTag.addAttribute(cU("Type"), cU("Class"));
+                aRootTag.addAttribute(cU("Type"), cU("Leak"));
                 aRootTag.addAttribute(cU("Info"), cU("Growing Classes"));
                 mMonitor->dumpMemoryLeaks(aJvmti, &aRootTag, mOptionList);
                 mMonitor->syncOutput(&aRootTag);

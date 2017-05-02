@@ -47,7 +47,7 @@ private:
     //! Constructor
     // ----------------------------------------------------
     TLogger() {
-        mActive     = true;
+        mActive     = false;
         mProperties = TProperties::getInstance();
     }
     // ----------------------------------------------------
