@@ -1656,15 +1656,8 @@ public:
             }
         } else if (aProperty->equalsKey(cU("Tracer"))) {
             aProperty->split(mTraceOptions, cU(','));
-		} else if (aProperty->equalsKey(cU("Logger"))) {
-			//aProperty->split(mLogOptions, cU(','));
-			//TLogger *aLogger = TLogger::getInstance();
-			//if (STRCMP(aProperty->getValue(), cU("on")) == 0) {
-			//	aLogger->start();
-			//}
-			//if (STRCMP(aProperty->getValue(), cU("append")) == 0) {
-			//	aLogger->start(true);
-			//}
+		} else if (aProperty->equalsKey(cU("Logging"))) {
+			aProperty->split(mLogOptions, cU(','));
 		} else if (aProperty->equalsKey(cU("DumpLevel"))) {
             mDumpLevel = (short)aProperty->toInteger();
             if (mDumpLevel < 0 || mDumpLevel > 1)
@@ -2439,8 +2432,13 @@ public:
         aTag->addAttribute(cU("Type"),        cU("ConfigFile"));
         aTag->addAttribute(cU("Value"),       mPropertyPath.str());
         aTag->addAttribute(cU("Description"), cU("Active config file"));
-        aTag = aNodeTag->addTag(cU("Property"));
 
+		aTag = aNodeTag->addTag(cU("Property"));
+		aTag->addAttribute(cU("Type"), cU("Logging"));
+		aTag->addAttribute(cU("Value"), mPropertyPath.str());
+		aTag->addAttribute(cU("Description"), cU("Active config file"));
+
+		aTag = aNodeTag->addTag(cU("Property"));
         dumpValues(&aStrValue, mTraceOptions);
         aTag->addAttribute(cU("Type"),        cU("Tracer"));
         aTag->addAttribute(cU("Value"),       aStrValue.str());

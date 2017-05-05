@@ -732,25 +732,23 @@ public:
             SAP_UC   aBuffer[128];
             TXmlTag  aRootTag(cU("Traces"), XMLTAG_TYPE_NODE);
 
-            aRootTag.addAttribute(cU("Type"),  cU("Growing"));
+            aRootTag.addAttribute(cU("Type"),  cU("Leak"));
             aRootTag.addAttribute(cU("Class"), aContext->getName());
-            aRootTag.addAttribute(cU("ID"), TString::parseHex((jlong)aContext->getID(), aBuffer));
 
-            TXmlTag *aTagClass = aRootTag.addTag(cU("Class"),   XMLTAG_TYPE_NODE);
-            aContext->dump(aTagClass);
+            TXmlTag *aTagClass = aRootTag.addTag(cU("Class"), XMLTAG_TYPE_NODE);
+			aContext->dump(aTagClass);
 
-            aTag = aRootTag.addTag(cU("List"), XMLTAG_TYPE_NODE);            
-            aTag->addAttribute(cU("Type"),    cU("History"));
-            aTag->addAttribute(cU("Detail"), cU("Growing"));
-            aTag->addAttribute(cU("ID"), TString::parseHex((jlong)aContext->getID(), aBuffer));
-            aContext->dumpHistory(aTag);
+            aTag = aTagClass->addTag(cU("List"), XMLTAG_TYPE_NODE);
+            aTag->addAttribute(cU("Detail"), cU("History"));
+			aTag->addAttribute(cU("ID"),     TString::parseHex((jlong)aContext->getID(), aBuffer));
+			aContext->dumpHistory(aTag);
 
-            aTag = aRootTag.addTag(cU("List"), XMLTAG_TYPE_NODE);
-            aTag->addAttribute(cU("Type"),    cU("Heap"));
-            aTag->addAttribute(cU("Detail"), cU("Growing"));
-            aTag->addAttribute(cU("ID"), TString::parseHex((jlong)aContext->getID(), aBuffer));
-            dumpHeap(aJvmti, aTag, aContext->getID(), NULL);
+            aTag = aTagClass->addTag(cU("List"), XMLTAG_TYPE_NODE);
+            aTag->addAttribute(cU("Detail"), cU("Heap"));
+			aTag->addAttribute(cU("ID"),     TString::parseHex((jlong)aContext->getID(), aBuffer));
+			dumpHeap(aJvmti, aTag, aContext->getID(), NULL);
 
+			mMemoryLeaks.insert(aContext->getID(), aContext);
             syncOutput(&aRootTag);            
             aContext->resetAlert();
         }
@@ -2744,7 +2742,7 @@ public:
 
                 if (aCnt++ < mProperties->getLimit(LIMIT_IO)) {
                     aClass->dumpHeap(aRootTag);
-					mMemoryLeaks.insert(aPtrClass);
+					// mMemoryLeaks.insert(aPtrClass);
                 }
             }
         }
@@ -2875,10 +2873,10 @@ public:
 
         if (mProperties->getProfilerMode() == PROFILER_MODE_JARM ||
             mProperties->getProfilerMode() == PROFILER_MODE_ATS) {
-            dumpMemoryUsage(aJvmti, &mContextClasses, aRootTag, aOptions, aRef);
+            dumpMemoryUsage(aJvmti, &mContextClasses, aRootTag, cU("Class"), aOptions, aRef);
         }
         else {
-            dumpMemoryUsage(aJvmti, &mClasses, aRootTag, aOptions, aRef);
+            dumpMemoryUsage(aJvmti, &mClasses, aRootTag, cU("Class"), aOptions, aRef);
         }
     }
     // ----------------------------------------------------
@@ -3029,7 +3027,7 @@ public:
             TXmlTag         *aRootTag, 
             TValues         *aOptions, 
             const SAP_UC    *aRef = NULL) {
-        dumpMemoryUsage(aJvmti, &mMemoryLeaks, aRootTag, aOptions, aRef);
+        dumpMemoryUsage(aJvmti, &mMemoryLeaks, aRootTag, cU("Leak"), aOptions, aRef);
     }
 private:
     // ----------------------------------------------------
@@ -3041,13 +3039,18 @@ private:
                 jvmtiEnv        *aJvmti,
                 THashClasses    *aHashTable,
                 TXmlTag         *aRootTag,
+		        const SAP_UC    *aType,
                 TValues         *aOptions, 
                 const SAP_UC    *aRef = NULL) {
 
-        TValues::iterator aPtrOptions;
+		TXmlTag          *aTagClass     = NULL;
+		TValues::iterator aPtrOptions;
         THashClasses::iterator aPtr;
         TValues           aSortDetail(2);
+		TProperty        *aProperty;
         TMonitorClass    *aClass        = NULL;
+		TMonitorClass    *aClassOption  = NULL;
+		
         jlong             jObject       = 0;
         TString           aColumnSort;
         TString           aColumnFilter;
@@ -3059,6 +3062,8 @@ private:
         bool              aStatus       = false;
         bool              aDumpHash     = false;
         bool              aDumpMethods  = false;
+		bool              aDumpHeap     = false;
+		bool              aSetType      = true;
 
         aColumnFilter   = cU(".");
         aColumnSort     = cU("CurrSize");
@@ -3071,7 +3076,10 @@ private:
                 if (!STRNCMP(*aPtrOptions, cU("-h"), 2)) {
                     aDumpHistory = true;
                 }
-                else if (!STRNCMP(*aPtrOptions, cU("-x"), 2)) {
+				else if (!STRNCMP(*aPtrOptions, cU("-H"), 2)) {
+					aDumpHeap = true;
+				}
+				else if (!STRNCMP(*aPtrOptions, cU("-x"), 2)) {
                     aDumpHash = true;
                 }
                 else if (!STRNCMP(*aPtrOptions, cU("-m"), 2)) {
@@ -3091,51 +3099,83 @@ private:
                     aStatus       = true;
                 }
                 else if (!STRNCMP(*aPtrOptions, cU("-C"), 2)) {
-                    jObject = TString::toInteger((*aPtrOptions) + 2);
-                    aClass  = findClass(aJvmti, jObject);
+                    jObject      = TString::toInteger((*aPtrOptions) + 2);
+					aClassOption = findClass(aJvmti, jObject);
                 }                
                 aPtrOptions = aOptions->next();
             }
         }
+		
+		aTagClass = NULL;
+		
+		if (aClassOption == NULL) {
+			aRootTag->addAttribute(cU("Type"), aType);
+			aSetType = false;
+		}
 
-        if (aClass != NULL) {
-            if (aDumpHistory) {
-                aRootTag->addAttribute(cU("Detail"), cU("HistoryGrowing"));
-                aClass->dumpHistory(aRootTag);
-            }
-            return;
-        }
-
-        TMonitorLock aLockAccess(mRawMonitorAccess);
+		TMonitorLock aLockAccess(mRawMonitorAccess);
         for (aPtr  = aHashTable->begin();
              aPtr != aHashTable->end();
              aPtr  = aHashTable->next()) {
-            aClass = aPtr->aValue;
+
+
+			aTagClass = NULL;
+			aClass    = aPtr->aValue;
+
+			if (aClassOption != NULL) {
+				if (aClassOption != aClass) {
+					continue;
+				}
+			}
 
             if ((aClass->getStatus() || aStatus) &&
-                aClass->compare(aColumnCurrSize, aMin) >= 0 &&
-                aClass->filterName(aColumnFilter.str())) { 
-                if (aCnt++ < mProperties->getLimit(LIMIT_IO)) { 
+                 aClass->compare(aColumnCurrSize, aMin) >= 0 &&
+                 aClass->filterName(aColumnFilter.str())) { 
+               
+				if (aCnt++ < mProperties->getLimit(LIMIT_IO)) { 
                     if (aDumpHistory) {
-                        TXmlTag *aTagClass = aRootTag->addTag(cU("Class"));
-                        aClass->dump(aTagClass, aRef, aDumpHash);
+						if (aTagClass == NULL) {
+							aTagClass = aRootTag->addTag(cU("Class"), XMLTAG_TYPE_NODE);
+							aClass->dump(aTagClass, aRef, aDumpHash);
+						}
 
-                        TXmlTag *aTagHisty = aTagClass->addTag(cU("List"), XMLTAG_TYPE_NODE);
-                        aTagHisty->addAttribute(cU("Type"), cU("History"));
-                        aClass->dumpHistory(aTagHisty);
-                    }
-                    else if (aDumpMethods) {
-                        // TXmlTag *aRootClass = aRootTag->addTag(cU("Class"),   XMLTAG_TYPE_NODE);
-                        aClass->dump(aRootTag, aRef, aDumpHash);
+						TXmlTag *aTagHisty = aTagClass->addTag(cU("List"), XMLTAG_TYPE_NODE);
+						if (aSetType) {
+							aTagHisty->addAttribute(cU("Type"), cU("History"));
+						}
+						else {
+							aTagHisty->addAttribute(cU("Detail"), cU("History"));
+						}
+						aTagHisty->addAttribute(cU("ID"),     TString::parseHex(aClass->getID(), aBuffer));
+						aClass->dumpHistory(aTagHisty);
+					}
+                    if (aDumpMethods) {
+						if (aTagClass == NULL) {
+							aTagClass = aRootTag->addTag(cU("Class"), XMLTAG_TYPE_NODE);
+							aClass->dump(aTagClass, aRef, aDumpHash);
+						}
 
-                        TXmlTag *aRootMeth = aRootTag->addTag(cU("List"), XMLTAG_TYPE_NODE);
-                        aRootMeth->addAttribute(cU("Type"), cU("Methods"));
-                        aClass->dumpMethods(aRootMeth);
+                        TXmlTag *aRootMeth = aTagClass->addTag(cU("List"), XMLTAG_TYPE_NODE);
+						aRootMeth->addAttribute(cU("Detail"), cU("Methods"));
+						aRootMeth->addAttribute(cU("ID"),     TString::parseHex(aClass->getID(), aBuffer));
+						aClass->dumpMethods(aRootMeth);
                     }
-                    else {
-                        TXmlTag *aTagClass = aRootTag->addTag(cU("Class"));
-                        aClass->dump(aTagClass, aRef, aDumpHash);
-                    }
+
+					if (aDumpHeap) {
+						if (aTagClass == 0) {
+							aTagClass = aRootTag->addTag(cU("Class"), XMLTAG_TYPE_NODE);
+							aClass->dump(aTagClass, aRef, aDumpHash);
+						}
+						TXmlTag *aRootMeth = aTagClass->addTag(cU("List"), XMLTAG_TYPE_NODE);
+						aRootMeth->addAttribute(cU("Detail"), cU("Heap"));
+						aRootMeth->addAttribute(cU("ID"),     TString::parseHex(aClass->getID(), aBuffer));
+						aClass->dumpHeap(aRootMeth);
+					}
+
+					if (aTagClass == NULL) {
+						aTagClass = aRootTag->addTag(cU("Class"));
+						aClass->dump(aTagClass, aRef, aDumpHash);
+					}
                 }                
             }
         }    

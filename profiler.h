@@ -1960,7 +1960,7 @@ public:
         TXmlTag *aTag;        
 
         if (mHeapCount != 0) {
-            aTag = aRootTag->addTag(cU("Class"));
+            aTag = aRootTag->addTag(cU("Stack"));
             aTag->addAttribute(cU("HeapCount"),  TString::parseInt(mHeapCount, aBuffer), PROPERTY_TYPE_INT);
             aTag->addAttribute(cU("HeapSize"),   TString::parseInt(mHeapSize,  aBuffer), PROPERTY_TYPE_INT);
             aTag->addAttribute(cU("ClassName"),  getName());
