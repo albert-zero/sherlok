@@ -2655,10 +2655,11 @@ public:
         }
         aResult = aJvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_EXCEPTION_CATCH,       NULL);
         aResult = aJvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_BREAKPOINT,            NULL);
-        aResult = aJvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_FIELD_MODIFICATION, NULL);
+        aResult = aJvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_FIELD_MODIFICATION,    NULL);
 
         if (mProperties->doMonitorMemoryOn()) {
-            aResult = aJvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_VM_OBJECT_ALLOC,   NULL);
+            aResult = aJvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_VM_OBJECT_ALLOC,    NULL);
+			aResult = aJvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_FIELD_MODIFICATION, NULL);
         }
     }
     // ----------------------------------------------------
@@ -2696,6 +2697,7 @@ public:
         aResult = aJvmti->SetEventNotificationMode(JVMTI_DISABLE, JVMTI_EVENT_METHOD_EXIT,              NULL);
         aResult = aJvmti->SetEventNotificationMode(JVMTI_DISABLE, JVMTI_EVENT_EXCEPTION_CATCH,          NULL);
         aResult = aJvmti->SetEventNotificationMode(JVMTI_DISABLE, JVMTI_EVENT_FIELD_MODIFICATION,       NULL);
+		aResult = aJvmti->SetEventNotificationMode(JVMTI_DISABLE, JVMTI_EVENT_FIELD_ACCESS,             NULL);
 
         if (!mTracer->doTraceContention(-1)) {
             aResult = aJvmti->SetEventNotificationMode(JVMTI_DISABLE, JVMTI_EVENT_MONITOR_CONTENDED_ENTER,  NULL);
@@ -3221,7 +3223,8 @@ private:
 						TXmlTag *aRootMeth = aTagClass->addTag(cU("List"), XMLTAG_TYPE_NODE);
 						aRootMeth->addAttribute(cU("Detail"), cU("Heap"));
 						aRootMeth->addAttribute(cU("ID"),     TString::parseHex(aClass->getID(), aBuffer));
-						aClass->dumpHeap(aRootMeth);
+						dumpHeap(aJvmti, aRootMeth, aClass->getID(), aOptions);
+						// aClass->dumpHeap(aRootMeth);
 					}
 
 					if (aTagClass == NULL) {

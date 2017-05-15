@@ -131,8 +131,6 @@ extern "C" void JNICALL doTelnetThread (
         if (!aConsole->checkState()) {
             while (aConsole->open()) {
                 if (aSecurity->login()) {
-
-
 					aConsole->login();
                     break;
                 }
@@ -285,6 +283,9 @@ extern "C" void JNICALL onVmInit(
     if (aProperties->doMonitoring()) {
         aMonitor->start(aJvmti, NULL, true);
     }
+	else {
+		aMonitor->stop(aJvmti, NULL);
+	}
     gInitialized = true;
     mMonitorJni->exit();
 }

@@ -745,13 +745,20 @@ public:
 		if (aString == NULL) {
 			return;
 		}
-		mBytes  = max(aBytes, STRLEN(aString));
-		mBytes  = max(128, aBytes);
+
+		if (aBytes == 0) {
+			aBytes = STRLEN(aString);
+			mBytes = max(128, STRLEN(aString));
+		}
+		else {
+			mBytes = max(128, aBytes);
+		}
+
 		mString = new SAP_UC[mBytes + 1];
 		memsetU(mString, 0,  mBytes + 1);
 		STRNCPY(mString, aString, mBytes, mBytes + 1);
 		
-		mInsertPos = STRLEN(mString);
+		mInsertPos = STRLEN(aString);
     }
     // ----------------------------------------------------------------
     // TString::TString
@@ -774,7 +781,7 @@ public:
 			memsetU(mString, 0, mBytes + 1);
 			STRNCPY(mString, aString, mBytes, mBytes + 1);
 		}
-		mInsertPos = STRLEN(mString);
+		mInsertPos = STRLEN(aString);
     }
 
     // ----------------------------------------------------------------
@@ -887,7 +894,7 @@ public:
         }
 
         STRNCPY(mString, aBuffer, aCpyBytes, mBytes + 1);
-        mInsertPos  = aCpyBytes;
+        mInsertPos  = STRLEN(mString);
     }
     // ----------------------------------------------------------------
     // TString::moveCursor
