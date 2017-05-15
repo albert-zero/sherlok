@@ -283,7 +283,7 @@ extern "C" void JNICALL onVmInit(
     }
 
     if (aProperties->doMonitoring()) {
-        aMonitor->start(aJvmti, NULL);
+        aMonitor->start(aJvmti, NULL, true);
     }
     gInitialized = true;
     mMonitorJni->exit();

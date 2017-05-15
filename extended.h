@@ -2069,6 +2069,21 @@ public:
     bool doTrace() {
         return mTraceOptions->getDepth() > 0;
     }
+	// ------------------------------------------------------------
+	// TProperties::doLogging
+	//! \brief  Access to configuration
+	//! \return \c TRUE if the logging is active
+	// ------------------------------------------------------------
+	bool doLogging() {
+		if (mLogOptions->empty()) {
+			return false;
+		}
+		if (!STRCMP(*(mLogOptions->top()), cU("on"))) {
+			return true;
+		}
+		return false;
+	}
+
     // ------------------------------------------------------------
     // TProperties::getTraceOptions
     //! \brief  Access to configuration

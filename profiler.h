@@ -1720,11 +1720,12 @@ public:
         }
         if (mSize < aSize) {
             if (mNrBits > 1) {
-                SAP_UC aBuffer[64];
+                SAP_UC aBuffer1[64];
+				SAP_UC aBuffer2[64];
 
                 ERROR_STR << cU(" TMonitorClass::deallocate: ") << mName.str() << cU(" ")
-                    << TString::parseInt(mSize, aBuffer)        << cU(" < ")
-                    << TString::parseInt(aSize, aBuffer)        << std::endl;
+                    << TString::parseInt(mSize, aBuffer1)        << cU(" < ")
+                    << TString::parseInt(aSize, aBuffer2)        << std::endl;
             }
             aSize = mSize;
         }
@@ -2513,6 +2514,7 @@ class TMemoryBit: public THashObj {
 public:
     TMonitorClass *mCtx;               //!< Reference to context class
     jlong          mSize;              //!< Size
+	jobject        mObject;
     unsigned short mTID;               //!< Transaction ID, which is unique for each profiler session
     int            mIsClass;           //!< Reference to class or object
     // ----------------------------------------------------
@@ -2523,12 +2525,14 @@ public:
             TMonitorClass *aCtx,
             jlong          aSize,
             unsigned short aTID,
-            int            aIsClass = true) {
+            int            aIsClass = true,
+		    jobject        jObject  = NULL) {
 
         mCtx     = aCtx;
         mSize    = aSize;
         mTID     = aTID;
         mIsClass = aIsClass;
+		mObject  = jObject;
     }
 };
 

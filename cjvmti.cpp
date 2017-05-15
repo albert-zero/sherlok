@@ -937,7 +937,7 @@ extern "C" jvmtiIterationControl JNICALL TMonitorHeapCallback(
     if (aUserData == NULL || (jlong)aUserData == aMemBit->mCtx->getID()) {
         
         // TMonitorLock aLockAccess(aMonitor->mRawMonitorAccess, true, false);
-        if (aMonitor->getState() == MONITOR_ACTIVE && aMemBit->mTID != aMonitor->getTransaction()) {
+        if (aMonitor->getState() != MONITOR_ACTIVE || aMemBit->mTID != aMonitor->getTransaction()) {
             return JVMTI_ITERATION_CONTINUE;
         }
 

@@ -461,7 +461,6 @@ public:
             aJni->ExceptionClear();
 
             resetClass(aClass);
-            aClass->setID((jlong)aMemBit);
 
             // Trace ClassLoad events
             if (mTracer->doTraceClass()) {
@@ -637,6 +636,10 @@ public:
         jvmtiError      aResult;
         TMonitorThread *aThreadObj;
         TMonitorClass  *aCtxClass;
+		
+		if (!mProperties->doMonitorMemoryOn()) {
+			return false;
+		}
 
         aResult = aJvmti->GetThreadLocalStorage(jThread, (void**)&aThreadObj);
         if (aResult    != JVMTI_ERROR_NONE ||
@@ -646,7 +649,7 @@ public:
         }
 
         aCtxClass = aThreadObj->getCallstack()->top()->getMethod()->getClass();
-        doObjectAlloc(aJvmti, aJni, aThreadObj, jObject, aSize, NULL, aCtxClass);
+        doObjectAlloc(aJvmti, aJni, aThreadObj, jClass, jObject, aSize, NULL, aCtxClass);
         return true;
     }
 
@@ -692,6 +695,7 @@ public:
             jvmtiEnv        *aJvmti,
             JNIEnv          *aJni,
             TMonitorThread  *aThread,
+		    jclass           jClass,
             jobject          aObject,
             jlong            aSize,
             TMonitorClass   *aMemCls,
@@ -703,14 +707,15 @@ public:
         TXmlTag        *aTag        = NULL;
         jlong           aObjTag     = 0;
         jlong           aClassTag   = 0;
-        jclass          jClass      = NULL;
         jclass          jStrClz     = NULL;
         
         aResult = aJvmti->GetTag(aObject, &aObjTag);
+		
         if (aObjTag != 0) {
             aMemBit = (TMemoryBit *)aObjTag;
             aMemBit->mCtx->deallocate(aMemBit->mSize, 0);
-            aMemBit->mCtx = aContext;
+			aMemBit->mSize = aSize;
+            aMemBit->mCtx  = aContext;
             aMemBit->mCtx->allocate(aMemBit->mSize, mGCTime, mGCNr);
             return;
         }
@@ -719,9 +724,40 @@ public:
             aResult = aJvmti->SetTag(aObject, (jlong)aMemBit);
             mNewObjects++;
         }
+
         if (aSize == 0) {
             return;
         }
+
+		
+		if (aMemCls == NULL) {
+			if (jClass == NULL) {
+				jClass = aJni->GetObjectClass(aObject);
+			}
+			aResult = aJvmti->GetTag(jClass, (jlong *)&aClsBit);
+
+			if (aClsBit == NULL) {
+				jlong xSize;
+				aResult = aJvmti->GetObjectSize(jClass, &xSize);
+				TMonitorClass *xNewClass = new TMonitorClass(aJvmti, jClass, NULL);
+				aClsBit = new TMemoryBit(xNewClass, xSize, gTransaction);
+				aResult = aJvmti->SetTag(jClass, (jlong)aClsBit);
+				xNewClass->setID((jlong)aClsBit);
+				resetClass(xNewClass);
+				mClasses.insert((long)aClsBit, xNewClass);
+				aJni->ExceptionClear();
+
+				//---aThread->setProcessJni(true);
+				//---jmethodID mid = aJni->GetMethodID(jClass, "toString", "()Ljava/lang/String;");
+				//---jstring strObj = (jstring)aJni->CallObjectMethod(jClass, mid);
+				//---const char *str = aJni->GetStringUTFChars(strObj, NULL);
+				//---//aMemBit = new TMemoryBit(aPtr->aValue, 0, gTransaction);
+				//---//aResult = aJvmti->SetTag(jClass, (jlong)aMemBit);
+				//---aThread->setProcessJni(false);
+			}
+		}
+		
+
         mNewAllocation  += aSize;
         aMemBit->mSize   = aSize;        
         aContext->allocate(aSize, mGCTime, mGCNr);
@@ -861,8 +897,9 @@ public:
         TMonitorThread  *aThread = NULL) {
 
         THashMethods::iterator aPtr;
+		TMonitorMethod *xMethod     = aMethod;
         jvmtiError      aResult;
-        bool            aFound      = (aMethod != NULL);
+        bool            aFound      = (xMethod != NULL);
         jlong           aCpuTime    = 0;
         TCallstack     *aCallstack  = NULL;
         TCallstack     *aDebugStack = NULL;
@@ -886,7 +923,7 @@ public:
         if (!aFound) {
             mRawMonitorAccess->enter(false);
                 aPtr    = mMethods.find(jMethod);
-                aMethod = aPtr->aValue;
+                xMethod = aPtr->aValue;
                 aFound  = (aPtr != mMethods.end());
             mRawMonitorAccess->exit();
         }
@@ -895,18 +932,18 @@ public:
             return;
         }
 
-        if (aMethod->getStatus()) {
+        if (xMethod->getStatus()) {
             aCallstack = aThread->getCallstack();
             aTimer     = aCallstack->push();
-            aTimer->set(aMethod);
+            aTimer->set(xMethod);
 
             // ------- Enter ATS -------------------------------------
             if (mProperties->getProfilerMode() == PROFILER_MODE_ATS) {
                 //mJvmti->RawMonitorEnter(mRawMonitorThreads);
             }
 
-            if (aMethod->checkContext(aCallstack, false)) {
-                if (aMethod->getTimer()) {
+            if (xMethod->checkContext(aCallstack, false)) {
+                if (xMethod->getTimer()) {
                     aCpuTime = aThread->getCurrentCpuTime();
                 }
 
@@ -916,11 +953,11 @@ public:
                 else {
                     aCount = aCallstack->getDepth();
                 }
-                aTimer->set(aMethod, aCpuTime, aCount, aCallstack->getHighMemMark());
-                aMethod->enter();
+                aTimer->set(xMethod, aCpuTime, aCount, aCallstack->getHighMemMark());
+                xMethod->enter();
 
                 // the trigger method
-                if (aMethod == mTriggerMethod) {
+                if (xMethod == mTriggerMethod) {
                     mTracer->startTrigger(aThread->getName());
                 }
             }
@@ -932,11 +969,11 @@ public:
             }        
         }
         
-        if (mTracer->doTraceMethod() && aMethod->getDebug()) {
+        if (mTracer->doTraceMethod() && xMethod->getDebug()) {
             // trace enter and exit events
             aCallstack = aThread->getCallstack();
 
-            if (aMethod->checkContext(aCallstack)) {
+            if (xMethod->checkContext(aCallstack)) {
                 mRawMonitorOutput->enter();
                     aCpuTime = aThread->getCurrentCpuTime();                    
                     TXmlTag  aRootTag(cU("Trace"));
@@ -945,18 +982,18 @@ public:
 
                     aDebugStack   = aThread->getDebugstack();
                     aTimer        = aDebugStack->push();
-                    aTimer->set(aMethod, aCpuTime, aCount);
-                    traceMethod(&aRootTag, aMethod, aThread->getID(), aTimer->getTimeStamp(), cU("Enter"), aDebugStack->getDepth(), cU(""));
+                    aTimer->set(xMethod, aCpuTime, aCount);
+                    traceMethod(&aRootTag, xMethod, aThread->getID(), aTimer->getTimeStamp(), cU("Enter"), aDebugStack->getDepth(), cU(""));
 
                     if (mTracer->doTraceParameter()) {
                         aParTag = aRootTag.addTag(cU("Traces"), XMLTAG_TYPE_NODE);
                         aParTag->addAttribute(cU("Type"),       cU("Variables"));
-                        aParTag->addAttribute(cU("MethodName"), aMethod->getName());
-                        aParTag->addAttribute(cU("MethodId"),   TString::parseHex((jlong)aMethod->getID(), aBuffer));
+                        aParTag->addAttribute(cU("MethodName"), xMethod->getName());
+                        aParTag->addAttribute(cU("MethodId"),   TString::parseHex((jlong)xMethod->getID(), aBuffer));
                         aParTag->addAttribute(cU("ThreadId"),   TString::parseHex(aThread->getID(), aBuffer));
                         aParTag->addAttribute(cU("Info"),       cU("Arguments(enter)"));
 
-                        dumpParameter(aJvmti, aJni, jThread, aParTag, aMethod);
+                        dumpParameter(aJvmti, aJni, jThread, aParTag, xMethod);
                     }
                     mTracer->printTrace(&aRootTag);
                 mRawMonitorOutput->exit();
@@ -1002,15 +1039,15 @@ public:
             return NULL;
         }
 
-        aDebugTrc = !aThread->getCallstack()->empty();
+        aDebugTrc  = !aThread->getCallstack()->empty();
 
         if (aDebugTrc) {
             aCallstack = aThread->getCallstack();
             aTimer     = aCallstack->top();
             aMethod    = aTimer->getMethod();  
             aDebugTrc  = (aMethod->getID() == jMethod);
-            aMemoryTrc = mProperties->doMonitorMemoryOn();
-        }
+			aMemoryTrc = mProperties->doMonitorMemoryOn();
+		}
         
         // Calculate memory
         while (aMemoryTrc) {
@@ -1048,7 +1085,8 @@ public:
                 if (aResult != JVMTI_ERROR_NONE) {
                     break;
                 }
-                doObjectAlloc(aJvmti, aJni, aThread, jObject, aSize, aMemMethod->getClass(), aMethod->getClass());
+				
+                doObjectAlloc(aJvmti, aJni, aThread, NULL, jObject, aSize, aMemMethod->getClass(), aMethod->getClass());
                 
                 aCallstack->incHighMemMark(aSize);
                 aMemory = max(0, (int)(aCallstack->getHighMemMark() - aTimer->getMemory()));
@@ -1154,6 +1192,7 @@ public:
                 char             aType,
                 jvalue           aValue) {
 
+		THashMethods::iterator aPtrMethod;
         TMonitorThread *aThreadObj;
         TMonitorClass  *aCtxClass;
         TMonitorMethod *aMethod;
@@ -1161,7 +1200,11 @@ public:
         jvmtiError      aResult;
         jlong           aSize = 0;
 
-        aResult = aJvmti->GetThreadLocalStorage(jThread, (void**)&aThreadObj);
+		if (!mProperties->doMonitorMemoryOn()) {
+			return;
+		}
+        
+		aResult = aJvmti->GetThreadLocalStorage(jThread, (void**)&aThreadObj);
         if (aResult != JVMTI_ERROR_NONE ||
             aThreadObj == 0 ||
             !aThreadObj->doCheck(false)) {
@@ -1172,11 +1215,16 @@ public:
             return;
         }
         aCtxClass   = aThreadObj->getCallstack()->top()->getMethod()->getClass();
-        aMethod     = mMethods.find(jMethod)->aValue;
-        aField      = aMethod->getClass()->getField(jField);
+        aPtrMethod  = mMethods.find( jMethod );
+		if (aPtrMethod == mMethods.end()) {
+			return;
+		}
+		aMethod = aPtrMethod->aValue;
+        aField  = aMethod->getClass()->getField( jField );
+
         if (aValue.l != NULL && aField != NULL) {
             aSize = aField->getArraySize(aJvmti, aJni, (jarray)aValue.l);
-            doObjectAlloc(aJvmti, aJni, aThreadObj, aValue.l, aSize, NULL, aCtxClass);
+            doObjectAlloc(aJvmti, aJni, aThreadObj, jClass, aValue.l, aSize, aMethod->getClass(), aCtxClass);
         }
     }
     // -----------------------------------------------------------------
@@ -2359,7 +2407,8 @@ public:
     // ----------------------------------------------------
     void resetMonitorFields(
             jvmtiEnv    *aJvmti,
-            bool         aAllowStart) {
+            bool         aAllowStart,
+		    bool         aInitVm = false) {
         
         mNrCallsFkt    = 0;
         mTriggerMethod = NULL;
@@ -2378,7 +2427,10 @@ public:
         TMonitorLock aLockMemory(mRawMonitorMemory);
         mNewAllocation = 0;
         mNewObjects    = 0;
-        gTransaction ++;
+
+		if (!aInitVm) {
+			gTransaction++;
+		}
     }
     // ----------------------------------------------------
     // TMonitor::resetClasses
@@ -2561,7 +2613,8 @@ public:
     // ----------------------------------------------------
     void start(
             jvmtiEnv    *aJvmti,
-            TXmlTag     *aRootTag) {        
+            TXmlTag     *aRootTag,
+		    bool         aInitVm = false) {        
 
         TXmlTag *aTag;
         jvmtiError aResult;
@@ -2579,7 +2632,7 @@ public:
 
         TMonitorThread::resetThreads();
         mTraceEvent   = aRootTag;
-        resetMonitorFields(aJvmti, true);
+        resetMonitorFields(aJvmti, true, aInitVm);
         mTraceEvent   = NULL;
         mNrCallsTrace = 0;
 
@@ -3109,7 +3162,6 @@ private:
 		aTagClass = NULL;
 		
 		if (aClassOption == NULL) {
-			aRootTag->addAttribute(cU("Type"), aType);
 			aSetType = false;
 		}
 
@@ -3188,6 +3240,10 @@ private:
             aString.concat(TString::parseInt(aCnt, aBuffer));
             aRootTag->addAttribute(cU("Result"), aString.str());
         }
+
+		if (aCnt > 0 && aClassOption == NULL) {
+			aRootTag->addAttribute(cU("Type"), aType);
+		}
         // sort the columns as specified
         aRootTag->qsort(aColumnSort.str());
     }
@@ -3208,7 +3264,8 @@ public:
             TValues         *aOptions, 
             jlong            aClassID, 
             jmethodID        aMethodID, 
-            THashMethods    *aHashMethods) {
+            THashMethods    *aHashMethods,
+		    const SAP_UC    *aType) {
 
         TValues::iterator       aPtrOptions;
         THashMethods::iterator  aPtrHashMethods;
@@ -3380,6 +3437,10 @@ public:
             aString.concat(TString::parseInt(aCnt, aBuffer));
             aRootTag->addAttribute(cU("Result"), aString.str());
         }
+		
+		if (aCnt > 0) {
+			aRootTag->addAttribute(cU("Type"), cU("Method"));
+		}
         aRootTag->qsort(aColumnSort);
     }
 public:

@@ -810,9 +810,8 @@ public:
             }
             case COMMAND_LSM: {
                 TXmlTag aRootTag(cU("List"), XMLTAG_TYPE_NODE);
-                aRootTag.addAttribute(cU("Type"), cU("Method"));
                 aRootTag.addAttribute(cU("Info"), cU("List Monitored Methods"));
-                mMonitor->dumpMethods(aJvmti, &aRootTag, mOptionList, 0, NULL, NULL);
+                mMonitor->dumpMethods(aJvmti, &aRootTag, mOptionList, 0, NULL, NULL, cU("Method"));
                 mMonitor->syncOutput(&aRootTag);
                 break;
             }

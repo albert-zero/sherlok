@@ -49,6 +49,11 @@ private:
     TLogger() {
         mActive     = false;
         mProperties = TProperties::getInstance();
+
+		if (mProperties->doLogging()) {
+			enable(true);
+		}
+		SAP_UC aBuffer[64];
     }
     // ----------------------------------------------------
     // TLogger::TLogger
