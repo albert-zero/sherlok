@@ -427,7 +427,7 @@ bool TSystem::openSocket(SOCKET *aHostSocket, unsigned short aPort, const SAP_UC
 
 #   if defined (_WINDOWS) 
        /*SAPUNICODEOK_CHARTYPE*//*SAPUNICODEOK_LIBFCT*//*SAPUNICODEOK_SIZEOF*/
-       sprintf_s(aInetAddr, sizeof(aInetAddr), cR("%d.%d.%d.%d"),
+       sprintf_s(aInetAddr, sizeofR(aInetAddr), cR("%d.%d.%d.%d"),
            /*SAPUNICODEOK_CHARTYPE*/(unsigned char)aHost->h_addr_list[0][0],
            /*SAPUNICODEOK_CHARTYPE*/(unsigned char)aHost->h_addr_list[0][1],
            /*SAPUNICODEOK_CHARTYPE*/(unsigned char)aHost->h_addr_list[0][2],
@@ -522,7 +522,7 @@ SAP_UC *TString::parseHex(
     jlong aDigit = 0;
     jlong aSign  = 0;
     /*SAPUNICODEOK_SIZEOF*/
-    jlong aSize  = 2 * sizeof(jlong);
+    jlong aSize  = 2 * sizeofR(jlong);
 
     if (aInt < 0) {
         aSign = 1;

@@ -3424,7 +3424,7 @@ public:
                 if (aCnt++ > mProperties->getLimit(LIMIT_IO)) {
                     continue;
                 }
-                aMethod->dump(aRootTag, aOutputSign, aOutputCont);  
+                aMethod->dump(aRootTag, aOutputSign, aOutputCont, aOutputHash);
                 if (aOutputParam) {
                     aRootTag->addAttribute(cU("Detail"), cU("Parameter"));
                     aMethod->dumpLocalVariables(aRootTag);

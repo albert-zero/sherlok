@@ -1,0 +1,75 @@
+# @(#) $Id: //bas/CGK/src/proj/v8sherlok/v8sherlok.gmk#6 $ SAP
+
+PROJECT := proj/v8sherlok
+COMPONENT := BC-JAS
+RESPONSIBLES := \
+    albert.rossmann@sap.com \
+    Albert.Zedlitz@sap.com
+
+include sapmake/top.gmk
+ifeq ($(EMPTY),$(filter $(SAP_PLATFORM),os390_64 ))
+#refact_cgk: Transfer -not_unicode to sapmake infrastructure.
+$(call declareProjectNotUnicode)
+
+STATIC_LIBS := \
+    ctilib
+ifeq ($(PLATFORM),windows)
+  $(PROJECT)_SHARED_LIB_NAME := sherlok
+else
+  $(PROJECT)_SHARED_LIB_NAME := libsherlok
+endif
+
+SHARED_LIBS := \
+    $($(PROJECT)_SHARED_LIB_NAME)
+    
+TEST_PROGRAMS := \
+    Profiler
+
+CPPFLAGS += -I$(JAVA_HOME_6)/include -I$(JAVA_HOME_6)/include/$(JAVA_PLATFORM) $(STLPORT_SHARED_CPPFLAGS) -DPROFILECPP
+
+ctilib_CXXSRCS := \
+    cti.cpp
+
+$($(PROJECT)_SHARED_LIB_NAME)_CXXSRCS := \
+    Profiler.cpp \
+    cjvmti.cpp   \
+    cjvmpi.cpp   \
+    system.cpp   \
+    cti.cpp 
+    
+$($(PROJECT)_SHARED_LIB_NAME)_LIBS := \
+    $(SY)prtslib \
+    cppnlslib \
+    dllib \
+    dptrrlib \
+    thrlib
+
+$($(PROJECT)_SHARED_LIB_NAME)_SHLIBS := \
+    $(STLPORT_LIBD)
+
+ifeq ($(PLATFORM),windows)
+$($(PROJECT)_SHARED_LIB_NAME)_DEF := \
+    sherlok.def
+endif
+
+Profiler_CXXSRCS := \
+    Profiler.cpp \
+    cjvmti.cpp   \
+    cjvmpi.cpp   \
+    system.cpp   \
+    cti.cpp 
+
+Profiler_LIBS := \
+    $(SY)prtslib \
+    cppnlslib \
+    thrlib
+    
+Profiler_SHLIBS := \
+    $(STLPORT_LIBD)
+
+##############################################################################
+include sapmake/rules.gmk
+##############################################################################
+
+endif # PLATFORM
+include sapmake/bottom.gmk
