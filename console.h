@@ -314,7 +314,7 @@ public:
 
 #if defined (_WINDOWS) 
         /*SAPUNICODEOK_CHARTYPE*//*SAPUNICODEOK_LIBFCT*//*SAPUNICODEOK_SIZEOF*/
-        sprintf_s(aInetAddr, sizeof(aInetAddr), cR("%d.%d.%d.%d"),
+        sprintf_s(aInetAddr, sizeofR(aInetAddr), cR("%d.%d.%d.%d"),
             (unsigned char)aHost->h_addr_list[0][0],
             (unsigned char)aHost->h_addr_list[0][1],
             (unsigned char)aHost->h_addr_list[0][2],
@@ -643,13 +643,13 @@ public:
     void print(long aValue) {
         union TSendData { 
             /*SAPUNICODEOK_SIZEOF*/
-            SAP_UC aBuffer[sizeof(long)];
+            SAP_UC aBuffer[sizeofR(long)];
             long aValue; 
         } aData;
 
         aData.aValue = htonl(aValue);
         /*SAPUNICODEOK_SIZEOF*/
-        print(aData.aBuffer, (int)sizeof(long));
+        print(aData.aBuffer, (int)sizeofR(long));
     }
     // -----------------------------------------------------------------
     // TConsole::echo

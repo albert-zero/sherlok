@@ -1176,7 +1176,7 @@ TJvmtiEnv::TJvmtiEnv():
     mCtiEnv         = new TCtiInterface();
     mEventCallbacks = NULL;
     /*SAPUNICODEOK_SIZEOF*/
-    memsetR(mEventSettings, 0, sizeof(mEventSettings));
+    memsetR(mEventSettings, 0, sizeofR(mEventSettings));
 };
 
 // -----------------------------------------------------------------
