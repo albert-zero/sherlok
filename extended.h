@@ -1159,8 +1159,8 @@ private:
         mDoContention           = false;
         mInitialized            = false;
         mCanGenExEvents         = true;
-        mVersion                = cU("Sherlok 1.6.0.3");
-        mVersionExt             = cU("Sherlok 1.6.0.3 ((c)21.11.2008/2011 by Albert Zedlitz)");
+        mVersion                = cU("Sherlok 2.0");
+        mVersionExt             = cU("Sherlok 2.0 ((c)21.11.2008/2018 by Albert Zedlitz)");
         mLimitIO                = 1000;
         mLimitHash              = gHashValue;
         mLimitHistory           = 10;

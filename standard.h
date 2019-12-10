@@ -2361,7 +2361,7 @@ public:
 };
 
 // -----------------------------------------------------------------
-static const unsigned gHashValue = 131071;
+static const unsigned gHashValue = 999983;
 // -----------------------------------------------------------------
 //! \class THashObj
 //! \brief Entries for THash has to be derived from this class
@@ -2489,7 +2489,7 @@ protected:
         if (aKey == (_TKey)0) {
             return end();
         }        
-        aIndex       = (unsigned long)(aKey) % (unsigned long)mMaxSize;
+        aIndex       = (jlong)(aKey) % (unsigned long)mMaxSize;
         aEntryInsert = end();
         aEntry       = end();
 
